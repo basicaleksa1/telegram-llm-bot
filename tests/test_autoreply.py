@@ -1,0 +1,289 @@
+import asyncio
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from userbot.autoreply import TELEGRAM_SERVICE_USER_ID, AutoReplier, register_auto_reply, to_llm_message
+from userbot.config import Config
+from userbot.llm import LLMError
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class FakeClient:
+    """Just enough of TelegramClient for the auto-replier."""
+
+    def __init__(self, history=(), first_name="Aleksa"):
+        self.history = list(history)  # newest first, like Telegram
+        self.first_name = first_name
+        self.actions = []
+
+    async def iter_messages(self, chat_id, limit):
+        for message in self.history[:limit]:
+            yield message
+
+    @asynccontextmanager
+    async def action(self, chat_id, kind):
+        self.actions.append((chat_id, kind))
+        yield
+
+    async def get_me(self):
+        return SimpleNamespace(first_name=self.first_name)
+
+
+def msg(id, text, out=False, media=None):
+    return SimpleNamespace(id=id, raw_text=text, out=out, media=media)
+
+
+def make_config(**overrides):
+    overrides.setdefault("auto_reply_delay", 0)
+    overrides.setdefault("auto_reply_quote", True)
+    return Config(api_id=1, api_hash="x", **overrides)
+
+
+def fake_event(chat=42, sender_id=42, bot=False, message=None, client=None):
+    message = message or msg(100, "hej")
+    return SimpleNamespace(
+        chat_id=chat,
+        sender_id=sender_id,
+        id=message.id,
+        message=message,
+        client=client or FakeClient(history=[message]),
+        get_sender=AsyncMock(return_value=SimpleNamespace(bot=bot, first_name="Pera")),
+        reply=AsyncMock(),
+        respond=AsyncMock(),
+    )
+
+
+def fake_llm(reply="ćao, javiću se"):
+    return SimpleNamespace(model="test-model", reply=AsyncMock(return_value=reply))
+
+
+# --- Fixed-text replies (no LLM) ---------------------------------------------
+
+
+def test_replies_with_default_text():
+    event = fake_event()
+    asyncio.run(AutoReplier(make_config()).handle(event))
+
+    event.reply.assert_awaited_once_with("brate radim")
+
+
+def test_replies_with_custom_text():
+    event = fake_event()
+    asyncio.run(AutoReplier(make_config(auto_reply_text="zauzet sam")).handle(event))
+
+    event.reply.assert_awaited_once_with("zauzet sam")
+
+
+def test_replies_to_every_message_without_delay_or_cooldown():
+    replier = AutoReplier(make_config())
+    events = [fake_event(), fake_event()]
+    for e in events:
+        asyncio.run(replier.handle(e))
+
+    assert all(e.reply.await_count == 1 for e in events)
+
+
+def test_ignores_bots():
+    event = fake_event(bot=True)
+    asyncio.run(AutoReplier(make_config()).handle(event))
+
+    event.reply.assert_not_awaited()
+
+
+def test_ignores_telegram_service_account():
+    event = fake_event(chat=TELEGRAM_SERVICE_USER_ID, sender_id=TELEGRAM_SERVICE_USER_ID)
+    asyncio.run(AutoReplier(make_config()).handle(event))
+
+    event.reply.assert_not_awaited()
+
+
+def test_cooldown_is_per_chat():
+    clock = FakeClock()
+    replier = AutoReplier(make_config(auto_reply_cooldown=60), clock=clock)
+
+    first, again, other_chat = fake_event(chat=1), fake_event(chat=1), fake_event(chat=2)
+    asyncio.run(replier.handle(first))
+    clock.now += 30
+    asyncio.run(replier.handle(again))
+    asyncio.run(replier.handle(other_chat))
+
+    first.reply.assert_awaited_once()
+    again.reply.assert_not_awaited()
+    other_chat.reply.assert_awaited_once()
+
+    clock.now += 31
+    after_cooldown = fake_event(chat=1)
+    asyncio.run(replier.handle(after_cooldown))
+    after_cooldown.reply.assert_awaited_once()
+
+
+def test_default_sends_a_plain_message_instead_of_quoting():
+    event = fake_event()
+    asyncio.run(AutoReplier(Config(api_id=1, api_hash="x", auto_reply_delay=0)).handle(event))
+
+    event.respond.assert_awaited_once_with("brate radim")
+    event.reply.assert_not_awaited()
+
+
+def test_quote_mode_replies_to_the_message():
+    event = fake_event()
+    asyncio.run(AutoReplier(make_config(auto_reply_quote=True)).handle(event))
+
+    event.reply.assert_awaited_once_with("brate radim")
+    event.respond.assert_not_awaited()
+
+
+# --- Waiting for the person to stop typing -----------------------------------
+
+
+def test_burst_of_messages_gets_one_reply_to_the_last_one():
+    async def scenario():
+        replier = AutoReplier(make_config(auto_reply_delay=0.05))
+        burst = [fake_event(message=msg(i, f"poruka {i}")) for i in range(3)]
+        for e in burst:
+            await replier.handle(e)
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.1)
+        return burst
+
+    first, second, last = asyncio.run(scenario())
+    first.reply.assert_not_awaited()
+    second.reply.assert_not_awaited()
+    last.reply.assert_awaited_once_with("brate radim")
+
+
+def test_new_message_does_not_cancel_a_reply_in_progress():
+    async def scenario():
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_reply(owner, history):
+            started.set()
+            await release.wait()
+            return "odgovor"
+
+        llm = SimpleNamespace(model="m", reply=slow_reply)
+        replier = AutoReplier(make_config(auto_reply_delay=0.01), llm=llm)
+        first, second = fake_event(message=msg(1, "a")), fake_event(message=msg(2, "b"))
+
+        await replier.handle(first)
+        await started.wait()  # first reply is now being generated
+        await replier.handle(second)
+        release.set()
+        await asyncio.sleep(0.05)
+        return first, second
+
+    first, second = asyncio.run(scenario())
+    first.reply.assert_awaited_once_with("odgovor")
+    second.reply.assert_awaited_once_with("odgovor")
+
+
+# --- LLM replies ---------------------------------------------------------------
+
+
+def test_llm_writes_the_reply_from_chat_history():
+    history = [msg(3, "jesi tu?"), msg(2, "brate radim", out=True), msg(1, "hej")]  # newest first
+    client = FakeClient(history=history, first_name="Aleksa")
+    event = fake_event(message=history[0], client=client)
+    llm = fake_llm("tu sam, javim se kasnije")
+
+    asyncio.run(AutoReplier(make_config(), llm=llm).handle(event))
+
+    event.reply.assert_awaited_once_with("tu sam, javim se kasnije")
+    owner, messages = llm.reply.await_args.args
+    assert owner == "Aleksa"
+    assert messages == [
+        {"role": "user", "content": "hej"},
+        {"role": "assistant", "content": "brate radim"},
+        {"role": "user", "content": "jesi tu?"},
+    ]
+    assert client.actions == [(42, "typing")]
+
+
+def test_history_respects_the_limit():
+    history = [msg(i, f"m{i}") for i in range(20, 0, -1)]
+    event = fake_event(message=history[0], client=FakeClient(history=history))
+    llm = fake_llm()
+
+    asyncio.run(AutoReplier(make_config(llm_history_limit=5), llm=llm).handle(event))
+
+    _, messages = llm.reply.await_args.args
+    assert [m["content"] for m in messages] == ["m16", "m17", "m18", "m19", "m20"]
+
+
+def test_current_message_is_added_if_history_does_not_include_it_yet():
+    client = FakeClient(history=[msg(1, "staro")])
+    event = fake_event(message=msg(2, "novo"), client=client)
+    llm = fake_llm()
+
+    asyncio.run(AutoReplier(make_config(), llm=llm).handle(event))
+
+    _, messages = llm.reply.await_args.args
+    assert messages[-1] == {"role": "user", "content": "novo"}
+
+
+def test_llm_error_falls_back_to_fixed_text():
+    llm = SimpleNamespace(model="m", reply=AsyncMock(side_effect=LLMError("Ollama is down")))
+    event = fake_event()
+
+    asyncio.run(AutoReplier(make_config(), llm=llm).handle(event))
+
+    event.reply.assert_awaited_once_with("brate radim")
+
+
+def test_unexpected_error_falls_back_to_fixed_text():
+    llm = SimpleNamespace(model="m", reply=AsyncMock(side_effect=RuntimeError("boom")))
+    event = fake_event()
+
+    asyncio.run(AutoReplier(make_config(), llm=llm).handle(event))
+
+    event.reply.assert_awaited_once_with("brate radim")
+
+
+def test_allowlist_limits_llm_to_listed_chats():
+    llm = fake_llm("llm odgovor")
+    replier = AutoReplier(make_config(llm_allowed_chats=frozenset({1})), llm=llm)
+    allowed, other = fake_event(chat=1), fake_event(chat=2)
+
+    asyncio.run(replier.handle(allowed))
+    asyncio.run(replier.handle(other))
+
+    allowed.reply.assert_awaited_once_with("llm odgovor")
+    other.reply.assert_awaited_once_with("brate radim")
+    assert llm.reply.await_count == 1
+
+
+def test_media_messages_are_described_to_the_llm():
+    photo = type("MessageMediaPhoto", (), {})()
+    assert to_llm_message(msg(1, "", media=photo)) == {"role": "user", "content": "[sent a photo]"}
+    assert to_llm_message(msg(1, "pogledaj", media=photo)) == {"role": "user", "content": "[sent a photo] pogledaj"}
+    assert to_llm_message(msg(1, "", out=True)) is None
+
+
+# --- Registration ----------------------------------------------------------------
+
+
+def test_registers_incoming_private_handler_when_enabled():
+    client = MagicMock()
+    register_auto_reply(client, make_config())
+
+    client.add_event_handler.assert_called_once()
+    builder = client.add_event_handler.call_args.args[1]
+    assert builder.incoming is True
+    assert builder.func(SimpleNamespace(is_private=True)) is True
+    assert builder.func(SimpleNamespace(is_private=False)) is False
+
+
+def test_does_not_register_when_disabled():
+    client = MagicMock()
+    register_auto_reply(client, make_config(auto_reply_enabled=False), llm=fake_llm())
+
+    client.add_event_handler.assert_not_called()

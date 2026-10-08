@@ -1,0 +1,11 @@
+# Secrets: the .env holds your API credentials and the session file
+# grants full access to your Telegram account.
+.env
+sessions/
+*.session
+*.session-journal
+
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
