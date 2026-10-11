@@ -5,18 +5,20 @@ from unittest.mock import AsyncMock
 import pytest
 from ollama import ResponseError
 
-from userbot.config import DEFAULT_SYSTEM_PROMPT_FILE, PROMPTS_DIR, Config
-from userbot.llm import FALLBACK_SYSTEM_PROMPT, LLM, LLMError, load_system_prompt
+from userbot.config import DEFAULT_PROMPT, Config
+from userbot.llm import FALLBACK_SYSTEM_PROMPT, LLM, LLMError, PromptFile, load_system_prompt
+from userbot.paths import DEFAULT_PROMPTS_DIR
 
 HISTORY = [{"role": "user", "content": "hej"}]
 
 
 def make_llm(client, tmp_path=None, prompt="You speak for {name}.", **overrides):
-    prompt_file = DEFAULT_SYSTEM_PROMPT_FILE
+    prompt_file = DEFAULT_PROMPTS_DIR / "chat.txt"
     if tmp_path is not None:
         prompt_file = tmp_path / "prompt.txt"
         prompt_file.write_text(prompt)
-    config = Config(api_id=1, api_hash="x", llm_system_prompt_file=prompt_file, **overrides)
+    overrides.setdefault("llm_system_prompt_file", prompt_file)
+    config = Config(api_id=1, api_hash="x", **overrides)
     return LLM(config, client=client)
 
 
@@ -108,8 +110,39 @@ def test_missing_prompt_file_uses_built_in_default(tmp_path):
 
 @pytest.mark.parametrize("name", ["chat.txt", "busy.txt"])
 def test_shipped_prompts_exist_and_use_owner_placeholder(name):
-    assert "{name}" in load_system_prompt(PROMPTS_DIR / name)
+    assert "{name}" in load_system_prompt(DEFAULT_PROMPTS_DIR / name)
 
 
 def test_default_prompt_is_the_conversation_prompt():
-    assert DEFAULT_SYSTEM_PROMPT_FILE == PROMPTS_DIR / "chat.txt"
+    assert DEFAULT_PROMPT == "prompts/chat.txt"
+
+
+def test_prompt_file_is_reloaded_when_it_changes(tmp_path):
+    path = tmp_path / "prompt.txt"
+    path.write_text("Version one for {name}.")
+    llm = make_llm(SimpleNamespace(), llm_system_prompt_file=path)
+    assert llm.build_messages("Aleksa", [])[0]["content"] == "Version one for Aleksa."
+
+    path.write_text("Version two, a bit longer, for {name}.")
+
+    assert llm.build_messages("Aleksa", [])[0]["content"] == "Version two, a bit longer, for Aleksa."
+
+
+def test_prompt_file_that_disappears_falls_back_to_default(tmp_path):
+    path = tmp_path / "prompt.txt"
+    path.write_text("Mine.")
+    prompt = PromptFile(path)
+    assert prompt.text == "Mine."
+
+    path.unlink()
+
+    assert prompt.text == FALLBACK_SYSTEM_PROMPT
+
+
+def test_switching_prompt_file(tmp_path):
+    (tmp_path / "busy.txt").write_text("Busy {name}.")
+    llm = make_llm(SimpleNamespace(), tmp_path)
+
+    llm.use_prompt_file(tmp_path / "busy.txt")
+
+    assert llm.system_prompt == "Busy {name}."

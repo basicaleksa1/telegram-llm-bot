@@ -99,7 +99,9 @@ class AutoReplier:
         else:
             await event.respond(text)  # plain message, like a normal chat
         self._last_reply[event.chat_id] = self._clock()
-        log.info("Auto-replied in chat %s: %r", event.chat_id, text[:80])
+        # Message text only at DEBUG: log files may be sent along with bug reports.
+        log.info("Auto-replied in chat %s (%d characters)", event.chat_id, len(text))
+        log.debug("Reply text: %r", text[:200])
 
     def _llm_allowed(self, chat_id: int) -> bool:
         return self.llm is not None and (not self.allowed_chats or chat_id in self.allowed_chats)

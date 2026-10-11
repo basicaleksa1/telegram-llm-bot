@@ -9,3 +9,8 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+settings.env
+logs/
+
+# Tester bundles (scripts/build_bundle.py)
+dist/
