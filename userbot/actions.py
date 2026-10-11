@@ -19,6 +19,17 @@ from .paths import Home
 from .ui import ask_code, ask_password, ask_phone, console, open_in_editor, setup_logging
 
 
+log = logging.getLogger("userbot")
+
+
+def ask(question):
+    """Ask a questionary question; Ctrl+C (None) stops the current flow instead of continuing."""
+    answer = question.ask()
+    if answer is None:
+        raise KeyboardInterrupt
+    return answer
+
+
 def load(home: Home, require_telegram: bool = False) -> Config | None:
     try:
         return load_config(home=home, require_telegram=require_telegram)
@@ -63,7 +74,7 @@ def start_bot(home: Home) -> None:
     except Exception as e:
         console.print(f"[red]The bot stopped:[/] {escape(friendly_error(e))}")
         console.print(f"[dim]Details are in {home.logs_dir / 'userbot.log'}[/]")
-        logging.getLogger("userbot").exception("Bot stopped with an error")
+        log.exception("Bot stopped with an error")
     console.rule("[bold]Bot stopped[/]")
 
 
@@ -81,9 +92,10 @@ def telegram_login(home: Home) -> bool:
             me = asyncio.run(bot.login(config, ask_phone, ask_code, ask_password))
     except KeyboardInterrupt:
         console.print("\n[yellow]Login cancelled.[/]")
-        return False
+        raise
     except Exception as e:
         console.print(f"[red]Login failed:[/] {escape(friendly_error(e))}")
+        log.warning("Login failed", exc_info=True)
         return False
     console.print(f"[green]✓ Logged in as {escape(me.first_name or '')} (@{me.username or '-'}).[/]")
     return True
@@ -100,7 +112,7 @@ def telegram_logout(home: Home) -> None:
         asyncio.run(bot.logout(config))
     except Exception as e:
         console.print(f"[red]Couldn't reach Telegram ({escape(friendly_error(e))}).[/]")
-        console.print("End the session in Telegram instead: Settings → Devices → Telegram Userbot → Terminate.")
+        console.print("End the session in Telegram instead: Settings → Devices → tap this session → Terminate.")
         bot.session_file(config).unlink(missing_ok=True)
         console.print("The local login file was deleted.")
         return
@@ -116,8 +128,8 @@ def run_chat(home: Home, name: str | None = None) -> None:
         return
     if not name:
         saved = read_settings(home).get("PLAYGROUND_NAME", "").strip()
-        name = questionary.text("Your first name (the prompt's {name}):", default=saved or "Me").ask()
-        if not name:
+        name = ask(questionary.text("Your first name (the prompt's {name}):", default=saved or "Me"))
+        if not name.strip():
             return
         if name != saved:
             write_setting("PLAYGROUND_NAME", name.strip(), home)
@@ -269,7 +281,7 @@ def ensure_ollama(home: Home, config: Config, install: bool = True) -> bool:
 def _install_ollama() -> bool:
     if ollama_setup.can_install_automatically():
         size = "about 1.6 GB" if sys.platform == "win32" else "about 200 MB"
-        if not questionary.confirm(f"Download and install Ollama now? ({size})", default=True).ask():
+        if not ask(questionary.confirm(f"Download and install Ollama now? ({size})", default=True)):
             console.print(f"Install it later from {ollama_setup.DOWNLOAD_PAGE}, then run the setup again.")
             return False
         console.print("[dim]On Windows the Ollama installer opens; click through it. On macOS, Ollama may show a welcome window.[/]")
@@ -279,12 +291,13 @@ def _install_ollama() -> bool:
                 asyncio.run(ollama_setup.install_ollama(lambda done, total: progress.update(task, completed=done, total=total or None)))
         except Exception as e:
             console.print(f"[red]Installing Ollama failed:[/] {escape(str(e))}")
+            log.warning("Installing Ollama failed", exc_info=True)
             console.print(f"Install it yourself from {ollama_setup.DOWNLOAD_PAGE}, then run the setup again.")
             return False
         return True
 
     console.print(f"On Linux, Ollama is installed with its official command:\n\n  [cyan]{ollama_setup.LINUX_INSTALL_COMMAND}[/]\n")
-    if not questionary.confirm("Run it now? It asks for your computer password (sudo).", default=True).ask():
+    if not ask(questionary.confirm("Run it now? It asks for your computer password (sudo).", default=True)):
         console.print("Run the command above in a terminal, then run the setup again.")
         return False
     if not ollama_setup.run_linux_installer():
@@ -322,10 +335,10 @@ def choose_model(config: Config) -> str | None:
             choices.append(questionary.Choice(f"{name:<14} (already downloaded)", value=name))
     choices.append(questionary.Choice("Type another model name (from ollama.com/library)", value="__other__"))
 
-    model = questionary.select("Which model should write the replies?", choices=choices).ask()
+    model = ask(questionary.select("Which model should write the replies?", choices=choices))
     if model == "__other__":
-        model = questionary.text("Model name, e.g. gemma4:12b:").ask()
-    return model.strip() if model else None
+        model = ask(questionary.text("Model name, e.g. gemma4:12b:"))
+    return model.strip() or None
 
 
 def pull_model(config: Config, model: str) -> bool:
@@ -337,7 +350,7 @@ def pull_model(config: Config, model: str) -> bool:
     free = ollama_setup.free_disk_gb()
     if option and free < option.download_gb + 1:
         console.print(f"[yellow]Only {free:.1f} GB free disk space; {model} needs about {option.download_gb:.0f} GB.[/]")
-        if not questionary.confirm("Try anyway?", default=False).ask():
+        if not ask(questionary.confirm("Try anyway?", default=False)):
             return False
 
     console.print(f"Downloading [bold]{escape(model)}[/]. This happens once; you can stop with Ctrl+C and continue later.")
@@ -352,9 +365,10 @@ def pull_model(config: Config, model: str) -> bool:
         asyncio.run(pull())
     except KeyboardInterrupt:
         console.print("\n[yellow]Download paused. Run it again to continue where it stopped.[/]")
-        return False
+        raise
     except Exception as e:
         console.print(f"[red]Download failed:[/] {escape(str(e))}")
+        log.warning("Downloading %s failed", model, exc_info=True)
         if "not found" in str(e).lower():
             console.print("[dim]Check the name on https://ollama.com/library[/]")
         return False

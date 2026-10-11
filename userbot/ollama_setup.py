@@ -34,11 +34,11 @@ class ModelOption:
     description: str
 
 
-# Best first. Sizes are rounded up from ollama.com/library/qwen3.5.
+# Best first. Download sizes from ollama.com/library/qwen3.5.
 MODELS = [
-    ModelOption("qwen3.5:9b", 9.0, "best replies; needs Apple Silicon with 16 GB+ or an NVIDIA GPU with 10 GB+"),
+    ModelOption("qwen3.5:9b", 7.6, "best replies; needs Apple Silicon with 16 GB+ or an NVIDIA GPU with 10 GB+"),
     ModelOption("qwen3.5:4b", 4.0, "good replies; fine on most machines with 12 GB+ RAM"),
-    ModelOption("qwen3.5:2b", 3.0, "faster, simpler replies; for 8 GB machines"),
+    ModelOption("qwen3.5:2b", 3.1, "faster, simpler replies; for 8 GB machines"),
     ModelOption("qwen3.5:0.8b", 1.2, "very small; runs almost anywhere, replies are basic"),
 ]
 

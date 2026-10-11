@@ -12,9 +12,9 @@ Expect about **30–60 minutes** the first time, most of it spent waiting for do
 |---|---|---|---|---|
 | 1 | Get your Telegram **API ID and hash** | my.telegram.org | 5 min | once |
 | 2 | Download the **bot zip** | link from the developer | 1 min | each new version |
-| 3 | **Python and libraries** (~100 MB) | downloaded automatically on first start | 1–3 min | first start of each version |
+| 3 | **Python and libraries** (~30 MB) | downloaded automatically on first start | 1–3 min | first start of each version |
 | 4 | Install **Ollama**, the program that runs the AI | ollama.com, installed automatically or by hand | 2–10 min | once |
-| 5 | Download the **AI model** (1–9 GB) | automatic, from ollama.com | 5–30 min | once per model |
+| 5 | Download the **AI model** (1–8 GB) | automatic, from ollama.com | 5–30 min | once per model |
 | 6 | **Log in to Telegram** with a code | the Telegram app | 2 min | once |
 | 7 | **End the session** when you stop testing | the Telegram app | 1 min | at the end |
 
@@ -28,7 +28,9 @@ You need:
 
 - **A Telegram account** and access to the Telegram app (phone or desktop) to receive login codes.
 - **A computer** with:
-  - Windows 10/11 (64-bit), macOS 12 or newer, or a 64-bit Linux
+  - Windows 10 (version 22H2 or newer) or Windows 11, 64-bit
+  - or macOS 14 (Sonoma) or newer
+  - or a 64-bit Linux
   - at least **8 GB of RAM** (16 GB is better)
   - about **10 GB of free disk space**
 - **A stable internet connection**, ideally Wi-Fi, for the downloads.
@@ -103,13 +105,13 @@ chmod +x start.sh
 ```
 
 ### First start (online, automatic)
-A text window opens and shows *"First start: downloading Python and the bot's libraries…"*. **This needs internet and takes 1–3 minutes, once.** Then the setup starts.
+A text window opens and shows *"First start: downloading Python and the bot's libraries…"*. **This needs internet and takes up to a few minutes, once.** Then the setup offers to start: answer **y**.
 
 ---
 
 ## Step 4: The setup
 
-The setup has 4 parts. Use the **arrow keys** and **Enter** to choose, and **y/n** for yes/no questions. You can stop at any point with **Ctrl+C**. The setup can be run again later from the menu (**Run setup again**).
+The setup has 4 steps; the screen shows *Step 1 of 4*, *Step 2 of 4*… and they match 4.1–4.4 below. Use the **arrow keys** and **Enter** to choose, and **y/n** for yes/no questions. You can stop at any point with **Ctrl+C**. The setup can be run again later from the menu (**Run setup again**).
 
 ### 4.1 Telegram API ID and hash
 Paste the **App api_id** and **App api_hash** from step 1:
@@ -117,8 +119,10 @@ Paste the **App api_id** and **App api_hash** from step 1:
 - **macOS:** ⌘V.
 - **Linux:** Ctrl+Shift+V.
 
-### 4.2 The local AI: Ollama (online, once)
-Ollama is a free program that runs the AI model on your computer. Your messages never go to a cloud AI.
+### 4.2 The local AI (online, once)
+This step installs Ollama and downloads an AI model.
+
+**Ollama** is a free program that runs the AI model on your computer. Your messages never go to a cloud AI.
 
 **The setup installs it for you if you answer *yes*:**
 
@@ -133,30 +137,33 @@ Ollama is a free program that runs the AI model on your computer. Your messages 
 
 > Ollama must be running whenever the bot runs. On Windows and macOS it normally starts automatically with your computer. If not, open the Ollama app. The bot also tries to start it for you.
 
-### 4.3 The AI model (online, once)
-The setup looks at your computer's memory and graphics card and **recommends a model**. Press Enter to accept it, or pick another:
+**The AI model.** Once Ollama runs, the setup looks at your computer's memory and graphics card and **recommends a model**. Press Enter to accept it, or pick another:
 
 | Model | Download | Suitable for |
 |---|---|---|
-| qwen3.5:9b | ~9 GB | Apple Silicon Mac with 16 GB+, or an NVIDIA GPU with 10 GB+. Best replies. |
+| qwen3.5:9b | ~8 GB | Apple Silicon Mac with 16 GB+, or an NVIDIA GPU with 10 GB+. Best replies. |
 | qwen3.5:4b | ~4 GB | Most computers with 12 GB+ RAM |
 | qwen3.5:2b | ~3 GB | 8 GB computers. Faster, simpler replies. |
 | qwen3.5:0.8b | ~1 GB | Weak computers. Basic replies. |
 
 The download shows a progress bar and can take a while. If it gets interrupted, run it again and it **continues where it stopped**. You can switch models later in the menu under **AI model**.
 
-### 4.4 Prompt
+### 4.3 Prompt
 The **prompt** is a plain text file with instructions for the AI. It's sent to the model as-is. Two are included:
 - **chat:** chats with people as you
 - **busy:** says you're not around and will reply later
 
 `{name}` in the prompt is replaced with your Telegram first name. You can edit the prompt at any time (see [Editing the prompt](#editing-the-prompt)).
 
-### 4.5 Telegram login (online, once)
+> ✏️ **Before you start the bot, read the chat prompt** (answer *y* to "Open it in an editor now?").
+> - Its *About {name}* lines (gender, where you live, work, interests, how you write) are **example details**. The AI tells people they're true about you, so replace them with your own, or delete what you don't want said.
+> - Out of the box, **replies are always in English**. That's both the prompt and the setting `LLM_REPLY_LANGUAGE=English`; see [Settings worth knowing](#settings-worth-knowing) to change it.
+
+### 4.4 Telegram login (online, once)
 1. Enter **your phone number** in international format (`+381…`).
 2. Telegram sends a **login code to your Telegram app**, as a message from "Telegram". Type it in.
 3. If your account has **two-step verification**, enter that password. It isn't shown while you type.
-4. Your Telegram apps show a **"new login"** notification, and the session appears under **Settings → Devices** as **Telegram Userbot**. That's this program.
+4. Your Telegram apps show a **"new login"** notification. The session appears under **Settings → Devices** with the **App title** you chose in step 1 (e.g. *My Userbot*) on the device *Telegram Userbot*. That's this program.
 
 **The login is saved on your computer**, so you won't be asked again.
 
@@ -164,7 +171,7 @@ The **prompt** is a plain text file with instructions for the AI. It's sent to t
 
 ## Step 5: Use it
 
-After the setup you see the **menu**:
+After the setup you see the **menu**. Next time you double-click the launcher, it opens directly:
 
 ```
 ? What do you want to do?
@@ -218,10 +225,10 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 
 | Setting | What it does |
 |---|---|
-| `LLM_ALLOWED_CHATS` | **Only these chats get AI replies.** Everyone else gets the fixed text. Find a chat's ID by sending `.id` in that chat. Good for testing with one friend first. |
-| `AUTO_REPLY_TEXT` | The fixed text sent when the AI is off or fails. |
+| `LLM_ALLOWED_CHATS` | **Only these chats get AI replies.** Everyone else gets the fixed text. Good for testing with one friend first. To find a chat's ID, start the bot and send `.id` in that chat: your message turns into "Chat ID: …" (the other person sees it too; delete it afterwards). |
+| `AUTO_REPLY_TEXT` | The fixed text sent when the AI is off, not allowed for that chat, or fails. Default: `brate radim`. |
 | `AUTO_REPLY_DELAY` | Seconds to wait for the person to stop typing before replying once. |
-| `LLM_REPLY_LANGUAGE` | Force replies into one language, e.g. `English`. Empty = whatever the prompt says. |
+| `LLM_REPLY_LANGUAGE` | Forces replies into one language. **Default: `English`.** Empty = whatever the prompt says (the chat prompt also says English; edit its LANGUAGE and FINAL REMINDER lines too). |
 | `AUTO_REPLY_ENABLED` | `false` turns off all automatic replies. |
 
 ---
@@ -229,7 +236,7 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 ## When you're done testing (online)
 
 1. Menu → **Log out of Telegram**. This ends the session on Telegram's side and deletes the saved login from your computer.
-2. **Double-check in Telegram:** **Settings → Devices** (Privacy and Security → Active sessions on some apps). If **Telegram Userbot** is still listed, tap it and choose **Terminate session**.
+2. **Double-check in Telegram:** **Settings → Devices** (Privacy and Security → Active sessions on some apps). If the session with your App title (device *Telegram Userbot*) is still listed, tap it and choose **Terminate session**.
 3. **Optional: remove everything.**
    - Delete the `TelegramUserbot` folder.
    - Delete the data folder (shown in the menu under *Data folder*):
@@ -237,7 +244,7 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
      - macOS: `~/Library/Application Support/TelegramUserbot`
      - Linux: `~/.local/share/TelegramUserbot`
    - Uninstall Ollama like any other app. Its models are in `~/.ollama` (Windows: `%USERPROFILE%\.ollama`).
-   - Your API ID can stay; it does nothing on its own. To be thorough, my.telegram.org has no delete button, but nothing runs without your login.
+   - Your API ID and hash can stay: they do nothing without a login, and my.telegram.org has no button to delete them.
 
 ---
 
@@ -251,7 +258,7 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | my.telegram.org says "ERROR" | See step 1: VPN/ad blocker off, other browser, other short name. |
 | Login code doesn't arrive | Look **in the Telegram app** (chat named "Telegram"), not in your SMS. |
 | "API ID / hash rejected" | Copy both values again from my.telegram.org, then **Run setup again**. |
-| "Ollama not running" | Open the Ollama app (llama icon), or let **Check everything** start it. |
+| "Ollama not running" | Open the Ollama app (llama icon). **Start the bot** and the playground also try to start it. If it's not installed, **Run setup again**. |
 | The model download is slow or stops | Run it again (menu → **AI model**); it continues where it stopped. |
 | Replies take a long time (30 s+) | The model is too big for your computer. Menu → **AI model**, and pick a smaller one. |
 | The bot always sends the fixed text | Run **Check everything**. Usually Ollama isn't running, or the model isn't downloaded. |
@@ -261,5 +268,5 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 
 ## Sending feedback or a bug report
 
-- **Send:** what you did, what happened, and the file **`logs/userbot.log`** from the data folder (menu → **Open data folder**). By default it doesn't contain the text of messages.
+- **Send:** what you did, what happened (a copy or screenshot of the text in the window helps), and the file **`logs/userbot.log`** from the data folder (menu → **Open data folder**). By default it doesn't contain the text of messages.
 - **Never send** the `sessions` folder or the `settings.env` file. They contain your login and API keys.

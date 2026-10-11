@@ -28,7 +28,7 @@ async def run_checks(home: Home, online: bool = True) -> list[Check]:
     add = checks.append
 
     writable = os.access(home.root, os.W_OK)
-    add(Check("Data folder", OK if writable else FAIL, str(home.root), "" if writable else "The folder isn't writable. Choose another one with --home."))
+    add(Check("Data folder", OK if writable else FAIL, str(home.root), "" if writable else "The folder isn't writable. Check its permissions."))
 
     try:
         config = load_config(home=home, require_telegram=False)

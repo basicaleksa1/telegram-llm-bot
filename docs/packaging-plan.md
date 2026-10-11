@@ -1,5 +1,10 @@
 # Plan: packaging the userbot for Windows, macOS and Linux
 
+> **Status: implemented** on branch `feature/package-app`. The macOS bundle has been tested from
+> a fresh unzip (first start, setup wizard, menu, AI chat). The Windows and Linux bundles are built
+> the same way but haven't been run on a real Windows/Linux machine yet. The tester guide is
+> [TESTERS.md](TESTERS.md).
+
 ## Decisions
 
 | Topic | Decision |
@@ -25,40 +30,40 @@ The tester unzips a folder and double-clicks **one file**:
 | macOS | `Start Userbot.command` |
 | Linux | `start.sh` |
 
-The launcher uses [uv](https://docs.astral.sh/uv/), a single small program included in the zip. **On first start it downloads Python 3.13 and the libraries (~100 MB) into the folder itself.** Nothing is installed system-wide, and deleting the folder removes it all. Later starts take about a second.
+The launcher uses [uv](https://docs.astral.sh/uv/), a single small program included in the zip. **On first start it downloads Python 3.13 and the libraries (~30 MB download) into the folder itself.** Nothing is installed system-wide, and deleting the folder removes it all. Later starts take about a second.
 
 - **One command on your Mac builds zips for all three OSes:** `python scripts/build_bundle.py`.
-- **The zips are small (~20–40 MB),** so they're easy to send.
+- **The zips are small (18–44 MB),** so they're easy to send.
 - **Prompts are plain text files,** easy to find and edit.
 - **The single-executable approach is still possible later** via GitHub's Windows, macOS and Linux build machines (see [plan-github-builds.md](plan-github-builds.md)).
 
-The model is **not** inside the zip (it's 3–9 GB). Ollama downloads it once on first setup.
+The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on first setup.
 
 ---
 
 ## What the tester experiences
 
 1. Unzip, then double-click the launcher. Get past the OS security warning once.
-2. **First start:** the launcher downloads Python and the libraries automatically, then the **setup wizard** runs:
+2. **First start:** the launcher downloads Python and the libraries automatically, then offers the **setup wizard** (4 steps):
    1. **Telegram API ID and hash.** It explains where to get them, offers to open my.telegram.org, and checks the format.
-   2. **Ollama.** It detects Ollama and, if it's missing, installs it after asking (Windows/macOS) or shows the one command to run (Linux). It starts Ollama if it isn't running.
-   3. **Model.** It detects RAM and GPU, recommends a model, and downloads it with a progress bar.
-   4. **Prompt.** Choose `chat` or `busy`, with an option to open the file in an editor right away.
-   5. **Telegram login.** Phone, the code from the Telegram app, and the 2FA password if set.
-3. **After setup, a menu:**
+   2. **The local AI.** It detects Ollama and starts it if it isn't running. If it's missing, it installs it after asking (Windows/macOS) or shows the one command to run (Linux). Then it detects RAM and GPU, recommends a model, and downloads it with a progress bar.
+   3. **Prompt.** Choose `chat` or `busy`, with an option to open the file in an editor right away.
+   4. **Telegram login.** Phone, the code from the Telegram app, and the 2FA password if set.
+3. **After setup, a menu.** Later starts open it directly:
 
 ```
- Telegram Userbot 0.1.0
- Data folder  ~/Library/Application Support/TelegramUserbot
- Telegram     logged in (session saved)
- AI model     qwen3.5:4b ✓ (Ollama running)
- Prompt       prompts/chat.txt
+ Telegram Userbot  0.1.0
+ Data folder       ~/Library/Application Support/TelegramUserbot
+ Telegram          login saved
+ AI model          qwen3.5:4b ✓
+ Prompt            chat.txt
 
  ? What do you want to do?
- ❯ Start the bot
+ » Start the bot
    Test the AI here in the terminal (playground)
    Prompts: edit / switch / create
    Settings
+   AI model
    Check everything (doctor)
    Run setup again
    Open data folder
@@ -102,7 +107,7 @@ The model is **not** inside the zip (it's 3–9 GB). Ollama downloads it once on
 - **Subcommands for scripting and power users:**
 
   ```
-  userbot start | chat | setup | doctor | logout | folder | --version
+  userbot start | chat | setup | doctor | login | logout | folder | --version
   userbot prompt list | use <name> | edit [name] | show | new <name> | reset
   userbot settings show | set KEY VALUE | edit
   userbot model list | recommend | use <model> | pull [model]
@@ -129,7 +134,7 @@ The model is **not** inside the zip (it's 3–9 GB). Ollama downloads it once on
 
   | Machine | Model | Download |
   |---|---|---|
-  | Apple Silicon with 16 GB or more, or an NVIDIA GPU with 10 GB or more | `qwen3.5:9b` | ~9 GB |
+  | Apple Silicon with 16 GB or more, or an NVIDIA GPU with 10 GB or more | `qwen3.5:9b` | ~8 GB |
   | 12 GB or more RAM, or an NVIDIA GPU with 5 GB or more | `qwen3.5:4b` | ~4 GB |
   | 8 GB or more RAM | `qwen3.5:2b` | ~3 GB |
   | Less | `qwen3.5:0.8b` (weak, but it runs) | ~1 GB |
@@ -144,7 +149,7 @@ The model is **not** inside the zip (it's 3–9 GB). Ollama downloads it once on
 - **Pinned uv version** (≥ 2 weeks old), downloaded from uv's official GitHub releases and **checked against the published SHA-256**.
 - **Safety:** files are taken from an explicit allowlist. The build **refuses** to include `.env`, `sessions/` or `*.session`, so your own login can never end up in a zip.
 - **`uv.lock`** pins the exact library versions, so every tester gets the same ones.
-- **Smoke test:** I'll unzip the macOS bundle and run it on your Mac, including the first-start download.
+- **Smoke test (done):** the macOS bundle was unzipped and run on the Mac, including the first-start download (~10 s), the setup wizard, the menu and the playground.
 
 ## Phase 5: Documentation
 
@@ -162,7 +167,7 @@ The model is **not** inside the zip (it's 3–9 GB). Ollama downloads it once on
    python scripts/build_bundle.py
    ```
 
-   The first time, it downloads uv (~60 MB) from GitHub.
+   The first time, it downloads the uv binaries (~90 MB, five platforms) from GitHub into `dist/.cache/`.
 3. **Upload the zip(s)** to Google Drive, Dropbox or WeTransfer, or send them directly in Telegram (it allows files up to 2 GB). Send each tester the zip for their OS plus a link to the guide; the guide is also inside the zip.
 4. **That's all.** No accounts, signing or GitHub setup needed for now.
 

@@ -16,6 +16,7 @@ import argparse
 import hashlib
 import io
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -91,7 +92,7 @@ def collect_app_files() -> list[Path]:
 
 
 def host_target() -> str:
-    machine = "aarch64" if subprocess.run(["uname", "-m"], capture_output=True, text=True).stdout.strip() in ("arm64", "aarch64") else "x86_64"
+    machine = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else "x86_64"
     if sys.platform == "darwin":
         return f"{machine}-apple-darwin"
     if sys.platform == "win32":
@@ -146,6 +147,7 @@ def build_zip(out: Path, os_name: str, app_files: list[Path]) -> None:
         def add(name: str, data: bytes, executable: bool = False) -> None:
             info = zipfile.ZipInfo(f"{TOP}/{name}", date_time=(2026, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3  # Unix, so the permission bits below count (also when built on Windows)
             info.external_attr = ((0o755 if executable else 0o644) | 0o100000) << 16
             archive.writestr(info, data)
 

@@ -2,7 +2,7 @@
 rem Starts Telegram Userbot (Windows).
 rem
 rem The first start downloads Python and the libraries the bot needs (about
-rem 100 MB) into the runtime folder next to this file. Nothing is installed
+rem 30 MB download) into the runtime folder next to this file. Nothing is installed
 rem system-wide: deleting this folder removes it all. Your settings, prompts and
 rem Telegram login are kept separately (see "Open data folder" in the menu).
 rem
@@ -19,7 +19,7 @@ set "UV_PYTHON_PREFERENCE=only-managed"
 set "UV_NO_CONFIG=1"
 set "PYTHONUTF8=1"
 
-if not exist "%DIR%runtime\venv" echo First start: downloading Python and the bot's libraries (about 100 MB, once)...
+if not exist "%DIR%runtime\venv" echo First start: downloading Python and the bot's libraries (about 30 MB, once)...
 
 "%DIR%runtime\bin\uv.exe" run --frozen --no-dev --python 3.13 --directory "%DIR%app" python -m userbot %*
 if errorlevel 1 (

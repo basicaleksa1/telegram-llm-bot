@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.panel import Panel
 
 from . import actions
+from .actions import ask
 from .config import write_setting
 from .paths import Home
 from .ui import console
@@ -49,19 +50,11 @@ def run_setup(home: Home) -> None:
     console.print("Choose [bold]Start the bot[/] in the menu. Try the AI first with [bold]Test the AI here in the terminal[/].")
 
 
-def _ask(question):
-    """questionary returns None on Ctrl+C; turn that into KeyboardInterrupt to stop the setup."""
-    answer = question.ask()
-    if answer is None:
-        raise KeyboardInterrupt
-    return answer
-
-
 def _telegram_credentials(home: Home) -> None:
     config = actions.load(home)
     if config and config.has_telegram_credentials:
         console.print(f"Already set (API_ID {config.api_id}).")
-        if not _ask(questionary.confirm("Change them?", default=False)):
+        if not ask(questionary.confirm("Change them?", default=False)):
             return
 
     console.print(
@@ -76,16 +69,16 @@ def _telegram_credentials(home: Home) -> None:
         "[dim]If the form only says ERROR: turn off VPN/ad blockers, try another browser, or a different short name.\n"
         "Keep these values private, like a password.[/]\n"
     )
-    if _ask(questionary.confirm("Open my.telegram.org in your browser now?", default=True)):
+    if ask(questionary.confirm("Open my.telegram.org in your browser now?", default=True)):
         webbrowser.open(TELEGRAM_APPS_URL)
 
-    api_id = _ask(
+    api_id = ask(
         questionary.text(
             "App api_id (a number):",
             validate=lambda v: bool(re.fullmatch(r"\s*\d{3,12}\s*", v)) or "It's a number, e.g. 1234567",
         )
     ).strip()
-    api_hash = _ask(
+    api_hash = ask(
         questionary.text(
             "App api_hash (32 characters):",
             validate=lambda v: bool(re.fullmatch(r"\s*[0-9a-fA-F]{32}\s*", v)) or "It's 32 characters of 0-9 and a-f",
@@ -101,8 +94,8 @@ def _ai(home: Home) -> None:
         "Replies are written by an AI model that runs on this computer through [bold]Ollama[/]. "
         "Messages never leave your computer. Without it, the bot sends a fixed text instead."
     )
-    if not _ask(questionary.confirm("Set up the local AI now?", default=True)):
-        console.print("[dim]Skipped. Choose this step later via 'Run setup again' or the Model menu.[/]")
+    if not ask(questionary.confirm("Set up the local AI now?", default=True)):
+        console.print("[dim]Skipped. Do it later via 'Run setup again' or the AI model menu.[/]")
         return
     write_setting("LLM_ENABLED", "true", home)
     if not actions.setup_model(home):
@@ -120,7 +113,7 @@ def _prompt(home: Home) -> None:
         "({name} becomes your Telegram first name). Edit it any time; changes apply to the next reply.\n"
         "[dim]chat = chats as you · busy = says you're not around and will reply later[/]"
     )
-    choice = _ask(
+    choice = ask(
         questionary.select(
             "Which prompt should the AI use?",
             choices=[questionary.Choice(p.stem, value=p) for p in prompts],
@@ -128,7 +121,7 @@ def _prompt(home: Home) -> None:
         )
     )
     actions.use_prompt(home, choice.stem)
-    if _ask(questionary.confirm("Open it in an editor now to read or change it?", default=False)):
+    if ask(questionary.confirm("Open it in an editor now to read or change it?", default=False)):
         actions.edit_prompt(home, choice)
 
 
@@ -141,7 +134,7 @@ def _login(home: Home) -> None:
         "Log in with the Telegram account the bot should answer for. You'll get a code in the "
         "Telegram app, and see a 'new login' notification: that's this program."
     )
-    if not _ask(questionary.confirm("Log in now?", default=True)):
+    if not ask(questionary.confirm("Log in now?", default=True)):
         console.print("[dim]Skipped. The bot asks when you start it.[/]")
         return
     actions.telegram_login(home)

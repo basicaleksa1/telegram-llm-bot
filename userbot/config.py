@@ -70,7 +70,7 @@ EDITABLE_SETTINGS = [
     Setting("AUTO_REPLY_COOLDOWN", "seconds", "Minimum seconds between auto-replies in the same chat. 0 = no limit."),
     Setting("AUTO_REPLY_QUOTE", "bool", "Quote their message above each reply (false looks more like a normal chat)."),
     Setting("LLM_ENABLED", "bool", "Let the local AI write the replies. false = always send the fixed text."),
-    Setting("LLM_MODEL", "text", "Ollama model to use, e.g. qwen3.5:4b. Use the Model menu to download one."),
+    Setting("LLM_MODEL", "text", "Ollama model to use, e.g. qwen3.5:4b. Use the AI model menu to download one."),
     Setting("LLM_SYSTEM_PROMPT_FILE", "text", "Prompt file the AI follows. Use the Prompts menu to switch."),
     Setting("LLM_REPLY_LANGUAGE", "text", "Force every reply into one language, e.g. English. Empty = whatever the prompt says."),
     Setting("LLM_HISTORY_LIMIT", "int", "How many recent messages of the chat the AI sees."),

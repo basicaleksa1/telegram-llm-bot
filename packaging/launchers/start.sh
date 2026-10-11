@@ -2,11 +2,12 @@
 # Starts Telegram Userbot (macOS and Linux).
 #
 # The first start downloads Python and the libraries the bot needs (about
-# 100 MB) into the runtime/ folder next to this file. Nothing is installed
+# 30 MB download) into the runtime/ folder next to this file. Nothing is installed
 # system-wide: deleting this folder removes it all. Your settings, prompts and
 # Telegram login are kept separately (see "Open data folder" in the menu).
 #
 # Any arguments are passed on, e.g.:  ./start.sh doctor   ./start.sh --help
+# (on macOS this file is "Start Userbot.command").
 set -e
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,7 +34,7 @@ export UV_NO_CONFIG=1
 export PYTHONUTF8=1
 
 if [ ! -d "$DIR/runtime/venv" ]; then
-    echo "First start: downloading Python and the bot's libraries (about 100 MB, once)..."
+    echo "First start: downloading Python and the bot's libraries (about 30 MB, once)..."
 fi
 
 exec "$UV" run --frozen --no-dev --python 3.13 --directory "$DIR/app" python -m userbot "$@"

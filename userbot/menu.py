@@ -150,7 +150,8 @@ def _settings_menu(home: Home) -> None:
         setting = next(s for s in EDITABLE_SETTINGS if s.key == key)
         console.print(f"[bold]{setting.key}[/]: {escape(setting.help)}")
         if setting.kind == "bool":
-            current = values.get(key, "").lower() not in ("false", "0", "no", "off")
+            config = actions.load(home)
+            current = bool(getattr(config, key.lower(), True)) if config else True
             value = questionary.select("New value:", choices=["true", "false"], default="true" if current else "false").ask()
         else:
             value = questionary.text("New value (empty = default):", default=values.get(key, "")).ask()

@@ -6,11 +6,13 @@
     userbot settings show | set KEY VALUE | edit
     userbot model list | recommend | use MODEL | pull [MODEL]
 
-From source: `python -m userbot ...`. With the tester bundle: `./start.sh ...`
-or `"Start Userbot.bat" ...`.
+From source: `python -m userbot ...`. With the tester bundle, the launcher takes
+the same commands: `./start.sh ...`, `"./Start Userbot.command" ...` or
+`"Start Userbot.bat" ...`.
 """
 
 import asyncio
+import logging
 from pathlib import Path
 
 import questionary
@@ -18,10 +20,11 @@ import typer
 from rich.markup import escape
 
 from . import __version__, actions, doctor, ollama_setup
+from .config import read_settings
 from .menu import run_menu
 from .paths import ensure_home, get_home, resolve_home, restore_default_prompts, set_home
 from .setup_wizard import run_setup
-from .ui import console, open_folder, open_in_editor, prepare_console
+from .ui import console, open_folder, open_in_editor, prepare_console, setup_logging
 
 app = typer.Typer(add_completion=False, rich_markup_mode="rich", help="Telegram userbot that auto-replies with a local AI.")
 prompt_app = typer.Typer(help="List, switch, edit and create prompts.", no_args_is_help=True)
@@ -44,6 +47,8 @@ def root(
     resolved = resolve_home(home)
     set_home(resolved)
     ensure_home(resolved)
+    # Log to logs/userbot.log from the start, so setup problems end up there too.
+    setup_logging(read_settings(resolved).get("LOG_LEVEL", "").strip().upper() or "INFO", resolved.logs_dir)
     if ctx.invoked_subcommand is None:
         run_menu(resolved)
 
@@ -225,4 +230,8 @@ def model_pull(model: str | None = typer.Argument(None, help="Model to download 
 
 def main(argv: list[str] | None = None) -> None:
     prepare_console()
-    app(args=argv, prog_name="userbot")
+    try:
+        app(args=argv, prog_name="userbot")
+    except Exception:
+        logging.getLogger("userbot").exception("Unexpected error")
+        raise

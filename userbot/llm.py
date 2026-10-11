@@ -136,7 +136,7 @@ class LLM:
             await self._client.show(self.model)
         except ResponseError as e:
             if e.status_code == 404:
-                return f"model {self.model!r} is not downloaded. Run: ollama pull {self.model}"
+                return f"model {self.model!r} is not downloaded. Download it in the menu (AI model), or run: ollama pull {self.model}"
             return f"Ollama error: {e}"
         except (ConnectionError, OSError):
             return f"cannot reach Ollama at {self.host}. Is the Ollama app running?"
