@@ -14,3 +14,6 @@ logs/
 
 # Tester bundles (scripts/build_bundle.py)
 dist/
+
+# macOS Finder metadata
+.DS_Store

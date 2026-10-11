@@ -81,7 +81,10 @@ def check_version() -> str:
 def collect_app_files() -> list[Path]:
     files = [ROOT / name for name in APP_FILES]
     for folder in APP_DIRS:
-        files += [p for p in sorted((ROOT / folder).rglob("*")) if p.is_file() and "__pycache__" not in p.parts]
+        files += [
+            p for p in sorted((ROOT / folder).rglob("*"))
+            if p.is_file() and "__pycache__" not in p.parts and p.name != ".DS_Store"
+        ]
     for path in files:
         rel = path.relative_to(ROOT).as_posix()
         if FORBIDDEN.search(rel):
