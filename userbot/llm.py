@@ -43,16 +43,53 @@ def load_system_prompt(path: Path) -> str:
     return text or FALLBACK_SYSTEM_PROMPT
 
 
+class PromptFile:
+    """A prompt file that is re-read whenever it changes on disk.
+
+    Lets testers edit the prompt while the bot (or the playground) is running:
+    the next reply uses the saved version, no restart needed.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._stamp: tuple[int, int] | None = None
+        self._text = ""
+
+    def _current_stamp(self) -> tuple[int, int] | None:
+        try:
+            stat = self.path.stat()
+        except OSError:
+            return None
+        return stat.st_mtime_ns, stat.st_size
+
+    @property
+    def text(self) -> str:
+        stamp = self._current_stamp()
+        if not self._text or stamp != self._stamp:
+            if self._text:
+                log.info("Prompt file %s changed, using the new version", self.path.name)
+            self._text = load_system_prompt(self.path)
+            self._stamp = stamp
+        return self._text
+
+
 class LLM:
     def __init__(self, config: Config, client: AsyncClient | None = None) -> None:
         self.model = config.llm_model
         self.host = config.llm_host
         self.timeout = config.llm_timeout
-        self.system_prompt = load_system_prompt(config.llm_system_prompt_file)
+        self.prompt = PromptFile(config.llm_system_prompt_file)
         self.reply_language = config.llm_reply_language
         self._client = client or AsyncClient(host=config.llm_host)
         # A 16 GB machine can only run one generation at a time sensibly.
         self._lock = asyncio.Lock()
+
+    @property
+    def system_prompt(self) -> str:
+        return self.prompt.text
+
+    def use_prompt_file(self, path: Path) -> None:
+        self.prompt = PromptFile(path)
 
     def build_messages(self, owner_name: str, history: Sequence[Message]) -> list[Message]:
         system = self.system_prompt.replace("{name}", owner_name)
@@ -99,7 +136,7 @@ class LLM:
             await self._client.show(self.model)
         except ResponseError as e:
             if e.status_code == 404:
-                return f"model {self.model!r} is not downloaded. Run: ollama pull {self.model}"
+                return f"model {self.model!r} is not downloaded. Download it in the menu (AI model), or run: ollama pull {self.model}"
             return f"Ollama error: {e}"
         except (ConnectionError, OSError):
             return f"cannot reach Ollama at {self.host}. Is the Ollama app running?"

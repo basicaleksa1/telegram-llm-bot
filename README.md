@@ -21,6 +21,11 @@ so nobody else can trigger them:
 | `.id`        | Shows the current chat's ID. As a reply, also shows the sender/message ID. |
 | `.help`      | Lists all available commands.                                           |
 
+It has a menu-driven terminal interface (setup wizard, prompt editing, settings, model
+downloads, diagnostics), and can be sent to testers as a zip that runs on Windows, macOS and
+Linux without installing Python. See [Sending it to testers](#sending-it-to-testers); testers
+follow [docs/TESTERS.md](docs/TESTERS.md).
+
 ---
 
 ## ⚠️ Read this first
@@ -42,12 +47,12 @@ so nobody else can trigger them:
 
 ## Requirements
 
-- Python **3.10+** (developed with 3.14)
+- Python **3.11+** (developed with 3.14; the tester bundle uses 3.13)
 - A Telegram account, and the phone that receives its login codes
 - Your own API credentials from my.telegram.org (see below)
-- For AI replies: [Ollama](https://ollama.com) and a model. The default `qwen3.5:9b` is a
-  **7.6 GB download** and uses **~8 GB of memory** while loaded. Works well on an Apple Silicon
-  Mac with 16 GB RAM.
+- For AI replies: [Ollama](https://ollama.com) (macOS 14+, Windows 10 22H2+ or Linux) and a
+  model. The default `qwen3.5:9b` is a **7.6 GB download** and uses **~8 GB of memory** while
+  loaded. Works well on an Apple Silicon Mac with 16 GB RAM.
 
 ---
 
@@ -82,6 +87,12 @@ pip install cryptg
 
 ### 3. Install Ollama and the model (for AI replies)
 
+The quickest way: create `.env` first (`cp .env.example .env`, step 4), then run
+`python -m userbot setup`. It asks for the API ID/hash, installs or starts Ollama, recommends a
+model for your computer and downloads it. (Without a `.env` in the repository, the setup writes
+to the per-user data folder instead; see [Commands and the data folder](#commands-and-the-data-folder).)
+To do it by hand:
+
 1. Download Ollama for macOS from <https://ollama.com/download> and move **Ollama.app** to
    **Applications**. Open it. A llama icon appears in the menu bar, and the server runs on
    `http://localhost:11434`. On first launch it offers to install the `ollama` terminal
@@ -113,15 +124,18 @@ API_ID=your_api_id
 API_HASH=your_api_hash
 ```
 
-Then open **`prompts/chat.txt`** and fill in the *About {name}* section:
+(`python -m userbot setup` asks for them and writes them into `.env` for you.)
 
-- **Gender (important):** pick one of the two lines given there. Serbian grammar needs it
-  ("bio sam" vs "bila sam"). If it's left out, the model guesses, and it guesses differently
-  from one reply to the next.
+The prompt, **`prompts/chat.txt`**, is a plain text script that's sent to the model as-is.
+Read it and adapt it, especially the *About {name}* lines:
+
+- **Gender:** Serbian grammar needs it ("bio sam" vs "bila sam"). Without it the model
+  guesses differently from one reply to the next.
 - **Where you live, work/school, interests, how you write:** this is what the bot talks
-  about. With an empty profile it gives vague answers or makes small things up. Only write
+  about. With nothing there it gives vague answers or makes small things up. Only write
   what you're fine with *anyone* who messages you learning. See
   [Conversation vs. busy mode](#conversation-vs-busy-mode).
+- **Testers get these files as they are** (see [Sending it to testers](#sending-it-to-testers)).
 
 All other settings are optional:
 
@@ -139,7 +153,7 @@ All other settings are optional:
 | `LLM_ENABLED`         | `true`        | `false` = always use the fixed `AUTO_REPLY_TEXT`.         |
 | `LLM_MODEL`           | `qwen3.5:9b`  | Any model you've pulled in Ollama (`ollama list`), e.g. `qwen3.5:4b`, `gemma4:12b`. |
 | `LLM_HOST`            | `http://localhost:11434` | Where Ollama runs.                             |
-| `LLM_SYSTEM_PROMPT_FILE` | `prompts/chat.txt` | The AI's instructions. `prompts/chat.txt` = hold a conversation as you, `prompts/busy.txt` = say you're busy. Relative to the project folder, or an absolute path. |
+| `LLM_SYSTEM_PROMPT_FILE` | `prompts/chat.txt` | The AI's instructions. `prompts/chat.txt` = hold a conversation as you, `prompts/busy.txt` = say you're busy. Relative to the data folder (the project folder when running from source), or an absolute path. |
 | `LLM_HISTORY_LIMIT`   | `20`          | How many recent messages of the chat the AI sees. More = better memory of the conversation, slightly slower. |
 | `LLM_TIMEOUT`         | `60`          | Seconds to wait for the AI before sending the fixed text instead. |
 | `LLM_ALLOWED_CHATS`   | *(empty)*     | Comma-separated chat IDs that get AI replies. Empty = everyone. Others get the fixed text. Find IDs with `.id`. |
@@ -151,18 +165,21 @@ All other settings are optional:
 python -m userbot
 ```
 
-The first run is interactive. Telethon asks for:
+This opens the **menu** (if `API_ID`/`API_HASH` aren't set yet, it offers the setup wizard
+first). Choose **Start the bot**, or skip the menu with `python -m userbot start`.
+
+The first start is interactive. It asks for:
 
 1. Your **phone number** (unless `PHONE` is set)
 2. The **login code**, which Telegram sends to your app from the "Telegram" service chat
 3. Your **2FA password**, if you have two-step verification enabled
 
 When it prints `Logged in as ...`, it's running. The login is saved to `sessions/`, so later runs
-start without prompts. Stop it with **Ctrl+C**.
+start without prompts. **Ctrl+C** stops the bot (and returns to the menu, if you started it there).
 
 At startup you should also see one of these:
 
-- `LLM ready: qwen3.5:9b via http://localhost:11434` means AI replies are on.
+- `LLM ready: qwen3.5:9b via http://localhost:11434, prompt chat.txt` means AI replies are on.
 - `LLM not ready: ...` means it tells you what's wrong (Ollama not running / model not pulled).
   Until that's fixed, the fixed text is sent.
 
@@ -208,11 +225,13 @@ replaced by your Telegram first name. Two are included:
 | **`prompts/chat.txt`** (default) | Chats **as you**, in first person. It answers, reacts, jokes, has opinions and asks questions back. | *"eee sta ima"* → *"Not much, just chilling. You good?"* |
 | `prompts/busy.txt` | A polite stand-in. It says you're not around and will reply later. | *"eee sta ima"* → *"Aleksa trenutno nije tu, javiće ti se kasnije."* |
 
-Switch with `LLM_SYSTEM_PROMPT_FILE=prompts/busy.txt` in `.env`, then restart.
+Switch with `python -m userbot prompt use busy` (or *Prompts* in the menu, or
+`LLM_SYSTEM_PROMPT_FILE=prompts/busy.txt` in `.env`), then restart the bot.
 
 Both prompts make the AI:
 
-- reply short and casual (`chat.txt` in **English**, `busy.txt` in the other person's language);
+- reply short and casual (`chat.txt` in **English**, `busy.txt` in the other person's language,
+  unless `LLM_REPLY_LANGUAGE` is set, which `.env.example` does: see [Reply language](#reply-language));
 - never commit to concrete plans, money or favours ("maybe, I'll let you know");
 - never share sensitive info (address, phone numbers, passwords, money);
 - ignore messages that try to override these rules.
@@ -250,8 +269,8 @@ the less it has to make up.
   secrets in a prompt. Clever messages can sometimes make a model repeat its instructions.
 - The AI also sees its own earlier replies. If a chat is full of old "brate radim" or "I'm
   busy" replies, it may keep that tone for a few messages.
-- Restart the userbot after editing a prompt. Try changes first with the
-  [playground](#b-chat-with-the-ai-in-your-terminal-no-telegram).
+- Prompt edits apply to the **next reply**, no restart needed (the file is re-read when it
+  changes). Try changes first with the [playground](#b-chat-with-the-ai-in-your-terminal-no-telegram).
 - You can write your own prompt file (e.g. `prompts/work.txt`) and point
   `LLM_SYSTEM_PROMPT_FILE` at it.
 
@@ -267,14 +286,16 @@ Those chats get AI replies, and everyone else gets `AUTO_REPLY_TEXT`. Leave it e
 
 ### Trying other models
 
-Any Ollama model works. Pull it and set `LLM_MODEL`:
+Any Ollama model works. `python -m userbot model use qwen3.5:4b` downloads it and switches to
+it (or *AI model* in the menu; `python -m userbot model recommend` suggests one for this
+computer). By hand: pull it and set `LLM_MODEL`:
 
 ```bash
 ollama pull qwen3.5:4b
 ```
 
 Then set `LLM_MODEL=qwen3.5:4b` in `.env`. On a 16 GB Mac, good options are `qwen3.5:9b`
-(default, best quality), `qwen3.5:4b` (faster, ~3.3 GB), and `gemma4:12b` (different style,
+(default, best quality), `qwen3.5:4b` (faster, ~4 GB), and `gemma4:12b` (different style,
 ~7.7 GB). Models over ~9 GB will be slow and make the Mac sluggish. `ollama list` shows
 what you've downloaded; `ollama rm <model>` deletes one.
 
@@ -303,24 +324,25 @@ With Ollama running, you play the friend, and the bot answers with exactly the s
 model and settings as the real userbot. This is the best way to tune your prompt:
 
 ```bash
-python -m userbot.playground --name Aleksa
+python -m userbot chat --name Aleksa
 ```
 
-Type messages and press Enter. `/reset` starts a new conversation, `/quit` exits. Edit
-`prompts/chat.txt`, restart the playground, and compare. Things worth trying: small talk,
+Type messages and press Enter. `/prompt busy` switches prompts, `/reset` starts a new
+conversation, `/quit` exits. Edit `prompts/chat.txt` and save: the next message already uses
+the new version. Things worth trying: small talk,
 "jesi gledao utakmicu?", "hoćeš u subotu na pivo?", "pozajmi mi 100 evra", "jel ovo bot?".
 
 ### C. Live test on your account
 
-1. Make sure Ollama is running, then start the userbot: `python -m userbot`. Check for
+1. Start the userbot: `python -m userbot start` (it starts Ollama if needed). Check for
    `LLM ready: ...` in the output.
 2. In any Telegram app, open **Saved Messages** (your chat with yourself; safe for testing,
    since nobody else sees it). Send `.help`, `.ping` and `.id`. Each message should be edited
    into the result.
 3. **AI reply:** ask a friend (or use a second account) to send you a private message. After
    ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
-   `Auto-replied in chat ...` with the text. Have them send 2–3 messages quickly. They should
-   get **one** reply.
+   `Auto-replied in chat ...` (the reply text only with `LOG_LEVEL=DEBUG`). Have them send
+   2–3 messages quickly. They should get **one** reply.
 4. **Fallback:** quit Ollama (menu-bar icon → Quit) and have them message again. They should get
    `brate radim`, and the terminal shows a warning. Reopen Ollama afterwards.
 5. Make sure commands **ignore other people**: ask the friend to send you `.ping`. They get an
@@ -333,27 +355,104 @@ prefix, and that the command is the **whole** message (`.ping`, not `hey .ping`)
 
 ---
 
+## Commands and the data folder
+
+`python -m userbot` without a command opens the menu. Everything in it is also a command:
+
+```
+python -m userbot setup | start | chat | doctor | login | logout | folder | --version
+python -m userbot prompt list | use NAME | edit [NAME] | show [NAME] | new NAME | reset
+python -m userbot settings show | set KEY VALUE | edit
+python -m userbot model list | recommend | use MODEL | pull [MODEL]
+```
+
+`--help` works on every level, e.g. `python -m userbot prompt --help`.
+
+Settings, prompts, the login and logs live in one **data folder** (see `userbot/paths.py`):
+
+- **Running from this repository with a `.env` file:** the repository itself (`.env`,
+  `prompts/`, `sessions/`, `logs/`), exactly as before.
+- **Otherwise (e.g. the tester bundle):** a per-user folder that survives updates:
+  - Windows: `%APPDATA%\TelegramUserbot`
+  - macOS: `~/Library/Application Support/TelegramUserbot`
+  - Linux: `~/.local/share/TelegramUserbot`
+
+  It holds `settings.env` (made from `.env.example`), `prompts/`, `sessions/` and `logs/`. The
+  default prompts are copied in on first run and never overwritten.
+- **`--home DIR` or `USERBOT_HOME=DIR`** picks any other folder, e.g. to test a fresh setup
+  without touching your own.
+
+---
+
+## Sending it to testers
+
+```bash
+python3 scripts/build_bundle.py
+```
+
+This builds `dist/userbot-<version>-windows.zip`, `-macos.zip` and `-linux.zip` (18–44 MB
+each). Send each tester the zip for their system, by Google Drive, WeTransfer or Telegram.
+Each zip contains:
+
+- **A launcher to double-click:** `Start Userbot.bat`, `Start Userbot.command` or `start.sh`.
+- **The tester guide:** [docs/TESTERS.md](docs/TESTERS.md), as `TESTER-GUIDE.md`.
+- **The app:** code, prompts, and the exact library versions from `uv.lock`.
+- **[uv](https://docs.astral.sh/uv/):** on the tester's first start it downloads Python 3.13
+  and the libraries into the bundle's own `runtime/` folder. Nothing is installed
+  system-wide.
+
+Things to know:
+
+- **Your own data never goes into a bundle.** The script only packs an explicit list of files
+  and refuses to include `.env`, `sessions/` or `*.session`.
+- **The default prompts testers get are the repository's `prompts/` files.**
+- **Before sending a new version,** bump the version in `userbot/__init__.py` and
+  `pyproject.toml`; the script checks that they match.
+- **The first build downloads the pinned uv binaries** (checked against their SHA-256) into
+  `dist/.cache/`. It also refreshes `uv.lock` when `pyproject.toml` changed; commit that.
+- **Building on GitHub,** single-file executables and code signing are planned separately in
+  [docs/plan-github-builds.md](docs/plan-github-builds.md).
+
+---
+
 ## Project structure
 
 ```
 telegram-bot/
 ├── userbot/
-│   ├── __main__.py      # Entry point: loads config, logs in, checks the LLM, runs until Ctrl+C
-│   ├── config.py        # Reads .env / environment variables
+│   ├── __main__.py      # Entry point: python -m userbot
+│   ├── cli.py           # Commands (Typer); no command = the menu
+│   ├── menu.py          # Interactive menu
+│   ├── setup_wizard.py  # First-run setup: API ID/hash, Ollama + model, prompt, login
+│   ├── actions.py       # What the menu and the commands do (shared)
+│   ├── bot.py           # Runs the userbot; Telegram login/logout
+│   ├── paths.py         # The data folder (settings, prompts, sessions, logs)
+│   ├── config.py        # Reads/writes the settings file + environment variables
+│   ├── ollama_setup.py  # Finds/installs/starts Ollama, recommends and downloads models
+│   ├── doctor.py        # `doctor`: checks everything and suggests fixes
+│   ├── ui.py            # Terminal output, logging, opening files/folders
 │   ├── commands.py      # @command decorator + wiring into Telethon
 │   ├── autoreply.py     # Auto-reply to incoming private messages (delay, history, fallback)
-│   ├── llm.py           # Talks to the local model through Ollama
-│   ├── playground.py    # Terminal chat with the AI for testing (python -m userbot.playground)
+│   ├── llm.py           # Talks to the local model through Ollama; reloads the prompt on change
+│   ├── playground.py    # Terminal chat with the AI for testing (python -m userbot chat)
 │   └── handlers/
 │       ├── __init__.py  # Imports handler modules so their commands register
 │       └── basic.py     # .ping, .id, .help
 ├── prompts/
-│   ├── chat.txt         # Default: chat as you. Fill in "About {name}"
+│   ├── chat.txt         # Default: chat as you
 │   └── busy.txt         # Alternative: "not around, will reply later"
+├── packaging/launchers/ # Start Userbot.bat / start.sh (also used as Start Userbot.command)
+├── scripts/
+│   └── build_bundle.py  # Builds the tester zips into dist/
+├── docs/
+│   ├── TESTERS.md       # Step-by-step guide for testers (included in each zip)
+│   ├── packaging-plan.md
+│   └── plan-github-builds.md
 ├── tests/               # pytest tests (offline)
 ├── sessions/            # Created on first run. Holds your login. KEEP PRIVATE
-├── .env.example         # Template for your .env
-├── requirements.txt
+├── .env.example         # Template for your .env / the data folder's settings.env
+├── pyproject.toml       # Dependencies (uv); uv.lock pins the bundle's versions
+├── requirements.txt     # Same dependencies for pip
 └── requirements-dev.txt
 ```
 
@@ -390,7 +489,7 @@ Useful things available on `event`: `event.edit(...)`, `event.reply(...)`, `even
 ### Reacting to other people's messages (your own handlers)
 
 The `@command` helper only listens to *your* messages. To react to incoming messages in other
-ways, add a plain Telethon handler. For example, in `userbot/__main__.py` after
+ways, add a plain Telethon handler. For example, in `run_bot()` in `userbot/bot.py`, after
 `register_commands(...)`:
 
 ```python
@@ -409,7 +508,7 @@ It's the quickest way to hit rate limits or get reported as spam.
 
 ## Running it long-term (optional)
 
-The userbot only works while `python -m userbot` (and Ollama, for AI replies) is running. To
+The userbot only works while it's running (`python -m userbot start`, or *Start the bot* in the menu), and Ollama too, for AI replies. To
 keep it up 24/7, run it on an always-on machine, using `tmux`/`screen`, a `launchd`/`systemd`
 service, or Docker. A small VPS without a GPU will run the LLM very slowly. Prefer a machine
 like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` file over
@@ -421,22 +520,23 @@ like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` fi
 
 | Problem | Fix |
 |---|---|
-| `Configuration error: Missing required setting(s)` | Create `.env` from `.env.example` and fill in `API_ID` / `API_HASH`. |
+| `Missing required setting(s): API_ID, API_HASH` | Run `python -m userbot setup`, or create `.env` from `.env.example` and fill them in. |
 | `ApiIdInvalidError` | `API_ID`/`API_HASH` are wrong. Copy them again from my.telegram.org. |
 | `PhoneNumberInvalidError` | Use international format with `+` and the country code. |
 | Login code never arrives | Look in the Telegram app (the "Telegram" service chat), not SMS. |
 | `FloodWaitError` | You're rate-limited. Wait the number of seconds it says. |
 | `AuthKeyDuplicatedError` / session errors | The same session file was used from two places at once. Delete the `.session` file and log in again. |
 | Commands do nothing | Check the prefix, that the command is the whole message, and that it was sent from the logged-in account. |
-| `LLM not ready: cannot reach Ollama` | Open the Ollama app (menu-bar llama icon). Check `curl http://localhost:11434/api/version`. |
-| `LLM not ready: model ... is not downloaded` | Run the `ollama pull ...` command it prints. |
+| `LLM not ready: cannot reach Ollama` | Open the Ollama app (menu-bar llama icon), or run `python -m userbot doctor`. Check `curl http://localhost:11434/api/version`. |
+| `LLM not ready: model ... is not downloaded` | `python -m userbot model pull`, or the `ollama pull ...` command it prints. |
 | Replies are always `brate radim` | Look for warnings in the terminal. Also check `LLM_ENABLED` and `LLM_ALLOWED_CHATS`. |
 | `No reply from ... within 60s` | The Mac is short on memory or busy. Close apps, use `qwen3.5:4b`, or raise `LLM_TIMEOUT`. |
 | AI answers in the wrong language | Set `LLM_REPLY_LANGUAGE` in `.env` (e.g. `English`) and restart. See [Reply language](#reply-language). |
-| AI uses the wrong gender for you | Fill in the gender line in `prompts/chat.txt` (or `busy.txt`), then restart. |
-| AI only says you're busy | You're using `prompts/busy.txt`. Remove `LLM_SYSTEM_PROMPT_FILE` from `.env`, or set it to `prompts/chat.txt`. Old "busy" replies in the chat can also keep that tone for a few messages. |
+| AI uses the wrong gender for you | Fill in the gender line in `prompts/chat.txt` (or `busy.txt`). Applies to the next reply. |
+| AI only says you're busy | You're using `prompts/busy.txt`. Run `python -m userbot prompt use chat` and restart the bot. Old "busy" replies in the chat can also keep that tone for a few messages. |
 | AI makes up things about you | Fill in more of *About {name}* in `prompts/chat.txt`. |
 | AI replies sound off | Edit the prompt (tone, how you write, example phrases), test in the playground, or try another model. |
+| Not sure what's wrong | `python -m userbot doctor` checks settings, prompt, Ollama, model, memory and the login. |
 
 ## Useful links
 
