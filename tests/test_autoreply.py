@@ -6,7 +6,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from userbot.autoreply import TELEGRAM_SERVICE_USER_ID, AutoReplier, is_image, register_auto_reply, to_llm_message
+from userbot.autoreply import (
+    QUICK_REPLY_DELAY,
+    TELEGRAM_SERVICE_USER_ID,
+    AutoReplier,
+    is_image,
+    register_auto_reply,
+    to_llm_message,
+)
 from userbot.handoff import PausedChats, parse_chat_id
 from userbot.config import Config
 from userbot.llm import LLMError
@@ -313,6 +320,18 @@ def test_delay_is_random_between_min_and_max():
 
     assert all(180 <= d <= 600 for d in delays)
     assert len(set(delays)) > 1
+
+
+def test_disabled_delay_replies_quickly_whatever_the_delay_settings():
+    replier = AutoReplier(make_config(auto_reply_delay_enabled=False, auto_reply_delay=180, auto_reply_delay_max=600))
+
+    assert replier.pick_delay() == QUICK_REPLY_DELAY
+
+
+def test_disabled_delay_keeps_an_even_shorter_delay():
+    replier = AutoReplier(make_config(auto_reply_delay_enabled=False, auto_reply_delay=0))
+
+    assert replier.pick_delay() == 0
 
 
 def test_delay_is_fixed_when_max_is_not_larger():

@@ -16,7 +16,7 @@ from pathlib import Path
 from rich.markup import escape
 from rich.panel import Panel
 
-from .autoreply import random_delay
+from .autoreply import reply_delay
 from .config import Config
 from .handoff import format_notification, resume_hint, split_handoff
 from .humanize import humanize
@@ -85,7 +85,7 @@ async def chat(config: Config, home: Home, name: str) -> None:
             console.print("[dim](chat handed off: the real bot stays quiet. /resume to continue, /reset to start over)[/]\n")
             continue
 
-        delay = random_delay(config.auto_reply_delay, config.auto_reply_delay_max, rng)
+        delay = reply_delay(config, rng)
         try:
             with console.status("typing…"):
                 raw = await llm.reply(name, _with_recent_images(history[-config.llm_history_limit :], config))
@@ -94,7 +94,7 @@ async def chat(config: Config, home: Home, name: str) -> None:
             history.pop()
             continue
 
-        if delay >= 1:
+        if config.auto_reply_delay_enabled and delay >= 1:
             console.print(f"[dim](the real bot would wait {_duration(delay)} before answering)[/]")
 
         reply, reason = split_handoff(raw)

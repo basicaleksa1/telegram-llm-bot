@@ -193,7 +193,7 @@ After the setup you see the **menu**. Next time you double-click the launcher, i
   - To test the script, play a client: "hi i have 2 models", send a photo, "paid, 3$", "first time", "how much?", "what accounts?", "i dont have accounts", "i dont have a supplier". The last one should trigger the handoff.
 - **Start the bot:** the bot now answers private messages. Leave the window open; **Ctrl+C** stops the bot and returns to the menu.
   - **Quick test:** in Telegram, open **Saved Messages** and send `.ping`. It turns into `pong (… ms)`.
-  - Then ask a friend to message you. **Replies wait a random 3–10 minutes on purpose**, so it looks like a person answering. Then they see "typing…" and get a reply. For a quick test, set `AUTO_REPLY_DELAY` to `3` and `AUTO_REPLY_DELAY_MAX` to `0` (see [Settings worth knowing](#settings-worth-knowing)), and set them back afterwards.
+  - Then ask a friend to message you. **Replies wait a random 3–10 minutes on purpose**, so it looks like a person answering. Then they see "typing…" and get a reply. For a quick test, set `AUTO_REPLY_DELAY_ENABLED` to `false` (see [Settings worth knowing](#settings-worth-knowing)), and back to `true` afterwards.
 - **Check everything (doctor):** if something doesn't work, start here. It lists every problem with a hint on how to fix it.
 
 **What the bot doesn't answer:** groups, channels and bots. It only replies in private chats. Your own messages are never answered.
@@ -246,7 +246,8 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 |---|---|
 | `LLM_ALLOWED_CHATS` | **Only these chats get AI replies.** Everyone else gets the fixed text. Good for testing with one friend first. To find a chat's ID, start the bot and send `.id` in that chat: your message turns into "Chat ID: …" (the other person sees it too; delete it afterwards). |
 | `AUTO_REPLY_TEXT` | The fixed text sent when the AI is off, not allowed for that chat, or fails. Default: `brate radim`. |
-| `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` | Each reply waits a random time between these two (in seconds). **Default for new installs: 180 and 600, so 3–10 minutes.** Set them to `3` and `0` for quick testing. |
+| `AUTO_REPLY_DELAY_ENABLED` | `false` = reply within a couple of seconds instead of waiting. **Use this while testing**, and set it back to `true` afterwards. |
+| `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` | Each reply waits a random time between these two (in seconds). **Default for new installs: 180 and 600, so 3–10 minutes.** |
 | `HANDOFF_NOTIFY_CHAT` | Which account gets the handoff alerts, e.g. `@my_second_account`. Empty = your Saved Messages. |
 | `HANDOFF_CLIENT_MESSAGE` | What the client gets when the AI hands the chat to you. Empty = nothing. |
 | `LLM_TYPO_RATE` | How many words get a small typo (0–1). **Default: `0.03`.** `0` = no typos. |
@@ -284,7 +285,7 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | The model download is slow or stops | Run it again (menu → **AI model**); it continues where it stopped. |
 | Replies take a long time (30 s+) | The model is too big for your computer. Menu → **AI model**, and pick a smaller one. |
 | The bot always sends the fixed text | Run **Check everything**. Usually Ollama isn't running, or the model isn't downloaded. |
-| The bot takes minutes to reply | That's on purpose: 3–10 minutes by default. Change `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX`. |
+| The bot takes minutes to reply | That's on purpose: 3–10 minutes by default. Set `AUTO_REPLY_DELAY_ENABLED` to `false` while testing. |
 | The bot stopped replying in one chat | The AI probably handed it to you. Check for an alert, then reply `resume` to it (see [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you)). |
 | No handoff alert on my other account | Set `HANDOFF_NOTIFY_CHAT` to that account's `@username` and restart. Until it's found, alerts go to your Saved Messages. |
 | "FloodWait" message | Telegram is rate-limiting. Wait the number of seconds shown. |

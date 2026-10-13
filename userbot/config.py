@@ -33,6 +33,7 @@ class Config:
     auto_reply_enabled: bool = True
     auto_reply_text: str = "brate radim"
     auto_reply_cooldown: float = 0.0
+    auto_reply_delay_enabled: bool = True
     auto_reply_delay: float = 3.0
     auto_reply_delay_max: float = 0.0
     auto_reply_quote: bool = False
@@ -74,6 +75,7 @@ class Setting:
 EDITABLE_SETTINGS = [
     Setting("AUTO_REPLY_ENABLED", "bool", "Reply automatically to private messages (AI or fixed text)."),
     Setting("AUTO_REPLY_TEXT", "text", "Fixed reply, used when the AI is off, not allowed for the chat, or fails."),
+    Setting("AUTO_REPLY_DELAY_ENABLED", "bool", "Wait AUTO_REPLY_DELAY(_MAX) before replying. false = reply within ~2 seconds, handy for testing."),
     Setting("AUTO_REPLY_DELAY", "seconds", "Wait until the person stops typing for this long, then reply once. 0 = reply immediately."),
     Setting("AUTO_REPLY_DELAY_MAX", "seconds", "If larger than AUTO_REPLY_DELAY, wait a random time between the two instead. 0 = always AUTO_REPLY_DELAY."),
     Setting("AUTO_REPLY_COOLDOWN", "seconds", "Minimum seconds between auto-replies in the same chat. 0 = no limit."),
@@ -171,6 +173,7 @@ def load_config(
         auto_reply_enabled=_parse_bool("AUTO_REPLY_ENABLED", get("AUTO_REPLY_ENABLED"), default=True),
         auto_reply_text=get("AUTO_REPLY_TEXT") or "brate radim",
         auto_reply_cooldown=_parse_seconds("AUTO_REPLY_COOLDOWN", get("AUTO_REPLY_COOLDOWN"), default=0.0),
+        auto_reply_delay_enabled=_parse_bool("AUTO_REPLY_DELAY_ENABLED", get("AUTO_REPLY_DELAY_ENABLED"), default=True),
         auto_reply_delay=_parse_seconds("AUTO_REPLY_DELAY", get("AUTO_REPLY_DELAY"), default=3.0),
         auto_reply_delay_max=_parse_seconds("AUTO_REPLY_DELAY_MAX", get("AUTO_REPLY_DELAY_MAX"), default=0.0),
         auto_reply_quote=_parse_bool("AUTO_REPLY_QUOTE", get("AUTO_REPLY_QUOTE"), default=False),

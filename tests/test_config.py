@@ -100,6 +100,7 @@ def test_llm_defaults(home):
     assert config.llm_allowed_chats == frozenset()
     assert config.llm_reply_language == ""
     assert config.auto_reply_delay_max == 0
+    assert config.auto_reply_delay_enabled is True
     assert config.llm_typo_rate == 0
     assert config.llm_vision is True
     assert config.llm_max_images == 3
@@ -124,6 +125,7 @@ def test_llm_settings_are_read(home):
             "LLM_ALLOWED_CHATS": "123, -100456,789",
             "LLM_REPLY_LANGUAGE": "English",
             "AUTO_REPLY_DELAY_MAX": "600",
+            "AUTO_REPLY_DELAY_ENABLED": "false",
             "LLM_TYPO_RATE": "0.05",
             "LLM_VISION": "false",
             "LLM_MAX_IMAGES": "2",
@@ -143,6 +145,7 @@ def test_llm_settings_are_read(home):
     assert config.llm_allowed_chats == frozenset({123, -100456, 789})
     assert config.llm_reply_language == "English"
     assert config.auto_reply_delay_max == 600
+    assert config.auto_reply_delay_enabled is False
     assert config.llm_typo_rate == 0.05
     assert config.llm_vision is False
     assert config.llm_max_images == 2
@@ -161,6 +164,7 @@ def test_llm_settings_are_read(home):
         ("AUTO_REPLY_QUOTE", "maybe"),
         ("LLM_ALLOWED_CHATS", "123,abc"),
         ("AUTO_REPLY_DELAY_MAX", "soon"),
+        ("AUTO_REPLY_DELAY_ENABLED", "sometimes"),
         ("LLM_TYPO_RATE", "lots"),
         ("LLM_TYPO_RATE", "1.5"),
         ("LLM_TYPO_RATE", "-0.1"),

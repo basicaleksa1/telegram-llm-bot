@@ -36,6 +36,9 @@ log = logging.getLogger(__name__)
 TELEGRAM_SERVICE_USER_ID = 777000
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 IMAGE_CACHE_SIZE = 32
+# With AUTO_REPLY_DELAY_ENABLED=false: just long enough to answer a burst of
+# messages (or an album of photos) once instead of once per message.
+QUICK_REPLY_DELAY = 2.0
 
 
 def to_llm_message(message: Message) -> dict[str, Any] | None:
@@ -63,8 +66,15 @@ def is_image(message: Message) -> bool:
     )
 
 
-def random_delay(delay: float, delay_max: float, rng: random.Random) -> float:
-    """`delay`, or a random time between `delay` and `delay_max` if that's larger."""
+def reply_delay(config: Config, rng: random.Random) -> float:
+    """Seconds to wait before replying.
+
+    AUTO_REPLY_DELAY, or a random time up to AUTO_REPLY_DELAY_MAX if that's
+    larger. With AUTO_REPLY_DELAY_ENABLED=false, at most QUICK_REPLY_DELAY.
+    """
+    delay, delay_max = config.auto_reply_delay, config.auto_reply_delay_max
+    if not config.auto_reply_delay_enabled:
+        return min(delay, QUICK_REPLY_DELAY)
     return rng.uniform(delay, delay_max) if delay_max > delay else delay
 
 
@@ -93,8 +103,7 @@ class AutoReplier:
     ) -> None:
         self.text = config.auto_reply_text
         self.cooldown = config.auto_reply_cooldown
-        self.delay = config.auto_reply_delay
-        self.delay_max = config.auto_reply_delay_max
+        self.config = config
         self.quote = config.auto_reply_quote
         self.history_limit = config.llm_history_limit
         self.allowed_chats = config.llm_allowed_chats
@@ -119,7 +128,7 @@ class AutoReplier:
         return last is not None and self._clock() - last < self.cooldown
 
     def pick_delay(self) -> float:
-        return random_delay(self.delay, self.delay_max, self._rng)
+        return reply_delay(self.config, self._rng)
 
     async def handle(self, event: events.NewMessage.Event) -> None:
         if event.sender_id == TELEGRAM_SERVICE_USER_ID:
@@ -276,6 +285,10 @@ def register_auto_reply(client: TelegramClient, config: Config, llm: LLM | None 
             log.exception("Auto-reply failed")
 
     client.add_event_handler(run, events.NewMessage(incoming=True, func=lambda e: e.is_private))
+    if not config.auto_reply_delay_enabled:
+        log.info("Reply delay is off (AUTO_REPLY_DELAY_ENABLED=false): replying within %.0f s", QUICK_REPLY_DELAY)
+    elif config.auto_reply_delay_max > config.auto_reply_delay:
+        log.info("Replies wait %.0f-%.0f s", config.auto_reply_delay, config.auto_reply_delay_max)
     if llm is not None:
         scope = f"chats {sorted(config.llm_allowed_chats)}" if config.llm_allowed_chats else "all private chats"
         log.info("Auto-reply enabled: %s writes replies for %s (fallback: %r)", llm.model, scope, config.auto_reply_text)

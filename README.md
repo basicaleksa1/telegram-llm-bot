@@ -161,6 +161,7 @@ All other settings are optional:
 | `LLM_TIMEOUT`         | `60`          | Seconds to wait for the AI before sending the fixed text instead. |
 | `LLM_ALLOWED_CHATS`   | *(empty)*     | Comma-separated chat IDs that get AI replies. Empty = everyone. Others get the fixed text. Find IDs with `.id`. |
 | `LLM_REPLY_LANGUAGE`  | *(empty)*     | Force every AI reply into one language, e.g. `English`. Empty = whatever the prompt says. See [Reply language](#reply-language). |
+| `AUTO_REPLY_DELAY_ENABLED` | `true`   | `false` = ignore the two delay settings and reply within ~2 seconds (still one reply to a burst of messages). Handy while testing. |
 | `AUTO_REPLY_DELAY_MAX` | `0`          | If larger than `AUTO_REPLY_DELAY`, each reply waits a random time between the two (e.g. `180`–`600` = 3 to 10 minutes). `0` = always `AUTO_REPLY_DELAY`. |
 | `LLM_TYPO_RATE`       | `0`           | Share of words (0–1) that get a small typo in AI replies, e.g. `0.03`. `0` = no typos. |
 | `LLM_VISION`          | `true`        | Show the AI the photos people send (needs a model that can see images, like `qwen3.5`). |
@@ -239,7 +240,7 @@ to be done in code. This is how the sales script in `prompts/chat.txt` is split:
 | Casual, friendly, not AI-sounding; the conversation steps, niche/Reddit rules, pricing | Prompt | `prompts/chat.txt` |
 | Typos | Code | `LLM_TYPO_RATE` swaps, drops or doubles a letter in a few words. Small models are bad at typos on purpose. |
 | No `#`, no markdown | Both | Prompt rule + the code strips headings, bold, bullets, backticks and em dashes |
-| Reply after 3–10 minutes, randomly | Code | `AUTO_REPLY_DELAY=180`, `AUTO_REPLY_DELAY_MAX=600` |
+| Reply after 3–10 minutes, randomly | Code | `AUTO_REPLY_DELAY=180`, `AUTO_REPLY_DELAY_MAX=600`; switch off with `AUTO_REPLY_DELAY_ENABLED=false` |
 | Look at the photos (hair colour, niche) | Both | The code downloads the photos and passes them to the model. The prompt says what to look for. |
 | "Notify me" + "stop chatting" at the key point | Both | The model answers `[[HANDOFF]] summary`. The code does the rest (below). |
 
@@ -395,8 +396,9 @@ next message already uses the new version.
 2. In any Telegram app, open **Saved Messages** (your chat with yourself; safe for testing,
    since nobody else sees it). Send `.help`, `.ping` and `.id`. Each message should be edited
    into the result.
-3. **AI reply:** for testing, set `AUTO_REPLY_DELAY=3` and `AUTO_REPLY_DELAY_MAX=0` so you
-   don't wait 3–10 minutes per reply. Ask a friend (or use a second account) to send you a
+3. **AI reply:** for testing, set `AUTO_REPLY_DELAY_ENABLED=false` so you don't wait
+   3–10 minutes per reply (`python -m userbot settings set AUTO_REPLY_DELAY_ENABLED false`, or
+   *Settings* in the menu). Ask a friend (or use a second account) to send you a
    private message. After ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
    `Auto-replied in chat ...` (the reply text only with `LOG_LEVEL=DEBUG`). Have them send
    2–3 messages quickly. They should get **one** reply.
@@ -410,7 +412,7 @@ next message already uses the new version.
    auto-reply, but the command itself does nothing.
 7. Make sure groups are ignored: when someone writes in a group you're in, nothing is sent.
 8. Use `LOG_LEVEL=DEBUG` in `.env` for more detail.
-9. Set the delay back to `AUTO_REPLY_DELAY=180` / `AUTO_REPLY_DELAY_MAX=600` when you're done.
+9. Turn the delay back on (`AUTO_REPLY_DELAY_ENABLED=true`) when you're done.
 
 If nothing happens, check that the terminal says `Logged in as ...`, that you used the right
 prefix, and that the command is the **whole** message (`.ping`, not `hey .ping`).
@@ -601,7 +603,7 @@ like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` fi
 | Prompt changes in the repository don't show up for a tester | Their data folder keeps its own copy. Menu → *Prompts* → *Restore the original prompts*. |
 | No handoff alert arrives | Check the startup log for `Handoff alerts go to ...`. If `HANDOFF_NOTIFY_CHAT` wasn't found, alerts go to your Saved Messages. Use an `@username`. Test the trigger in the playground. |
 | The bot doesn't reply in one chat | It may be paused (handed over to you). Send `.paused` in Saved Messages to check, `.resume <chat id>` to continue. |
-| Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes by default). Lower them for testing. |
+| Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes by default). Set `AUTO_REPLY_DELAY_ENABLED=false` while testing. |
 | AI talks about a photo it can't see | The model can't read images (the log says so at startup). Use `qwen3.5`, or set `LLM_VISION=false`. |
 | AI replies sound off | Edit the prompt (tone, how you write, example phrases), test in the playground, or try another model. |
 | Not sure what's wrong | `python -m userbot doctor` checks settings, prompt, Ollama, model, memory and the login. |
