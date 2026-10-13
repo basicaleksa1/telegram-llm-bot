@@ -111,7 +111,8 @@ def _prompt(home: Home) -> None:
     console.print(
         "The prompt is a plain text file with the AI's instructions. It's sent to the model as-is "
         "({name} becomes your Telegram first name). Edit it any time; changes apply to the next reply.\n"
-        "[dim]chat = chats as you · busy = says you're not around and will reply later[/]"
+        "[dim]chat = the Reddit promotion sales script: qualifies the client and hands the chat to you "
+        "at the key point[/]"
     )
     choice = ask(
         questionary.select(
@@ -122,7 +123,7 @@ def _prompt(home: Home) -> None:
     )
     actions.use_prompt(home, choice.stem)
     if ask(questionary.confirm("Open it in an editor now to read or change it?", default=False)):
-        actions.edit_prompt(home, choice)
+        actions.edit_prompt(choice)
 
 
 def _login(home: Home) -> None:

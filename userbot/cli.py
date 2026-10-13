@@ -22,7 +22,7 @@ from rich.markup import escape
 from . import __version__, actions, doctor, ollama_setup
 from .config import read_settings
 from .menu import run_menu
-from .paths import ensure_home, get_home, resolve_home, restore_default_prompts, set_home
+from .paths import default_prompt_names, ensure_home, get_home, resolve_home, restore_default_prompts, set_home
 from .setup_wizard import run_setup
 from .ui import console, open_folder, open_in_editor, prepare_console, setup_logging
 
@@ -80,7 +80,6 @@ def doctor_command(offline: bool = typer.Option(False, "--offline", help="Don't 
         raise typer.Exit(1)
 
 
-
 @app.command()
 def login() -> None:
     """Log in to Telegram (only needed once)."""
@@ -118,7 +117,7 @@ def prompt_list() -> None:
 
 @prompt_app.command("use")
 def prompt_use(name: str) -> None:
-    """Make NAME the active prompt (e.g. chat, busy)."""
+    """Make NAME the active prompt (e.g. chat, or one you created)."""
     if not actions.use_prompt(get_home(), name):
         raise typer.Exit(1)
 
@@ -131,7 +130,7 @@ def prompt_edit(name: str | None = typer.Argument(None, help="Prompt to edit (de
     if not path.exists():
         console.print(f"[red]{escape(str(path))} doesn't exist.[/]")
         raise typer.Exit(1)
-    actions.edit_prompt(home, path)
+    actions.edit_prompt(path)
 
 
 @prompt_app.command("show")
@@ -152,13 +151,14 @@ def prompt_new(name: str, use: bool = typer.Option(True, help="Make it the activ
         raise typer.Exit(1)
     if use:
         actions.use_prompt(home, path.stem)
-    actions.edit_prompt(home, path)
+    actions.edit_prompt(path)
 
 
 @prompt_app.command("reset")
 def prompt_reset(yes: bool = typer.Option(False, "--yes", "-y", help="Don't ask for confirmation.")) -> None:
-    """Restore the original chat/busy prompts (other prompt files are kept)."""
-    if yes or questionary.confirm("Overwrite chat.txt and busy.txt with the original versions?", default=False).ask():
+    """Restore the original prompts (other prompt files are kept)."""
+    names = " and ".join(default_prompt_names())
+    if yes or questionary.confirm(f"Overwrite {names} with the original version?", default=False).ask():
         restored = restore_default_prompts(get_home())
         console.print(f"Restored: {', '.join(restored)}" if restored else "Nothing to restore here.")
 

@@ -8,7 +8,7 @@ from rich.table import Table
 
 from . import __version__, actions, bot, doctor, ollama_setup
 from .config import EDITABLE_SETTINGS, read_settings
-from .paths import Home, restore_default_prompts
+from .paths import Home, default_prompt_names, restore_default_prompts
 from .setup_wizard import run_setup
 from .ui import console, open_folder, open_in_editor
 
@@ -77,7 +77,20 @@ def _print_status(home: Home) -> None:
 
     prompt = config.llm_system_prompt_file
     table.add_row("Prompt", escape(prompt.name) + ("" if prompt.exists() else " [red](missing)[/]"))
+
+    if not config.auto_reply_delay_enabled:
+        delay = "[yellow]off[/] (replies within seconds; turn on before real use)"
+    elif config.auto_reply_delay_max > config.auto_reply_delay:
+        delay = f"{_minutes(config.auto_reply_delay)}–{_minutes(config.auto_reply_delay_max)}, random"
+    else:
+        delay = _minutes(config.auto_reply_delay)
+    table.add_row("Reply delay", delay)
+    table.add_row("Handoff alerts", escape(config.handoff_notify_chat or "your Saved Messages"))
     console.print(table)
+
+
+def _minutes(seconds: float) -> str:
+    return f"{seconds / 60:g} min" if seconds >= 60 else f"{seconds:g} s"
 
 
 async def _ai_status(host: str, model: str) -> tuple[bool, bool]:
@@ -99,14 +112,14 @@ def _prompts_menu(home: Home) -> None:
                 questionary.Choice("Switch to another prompt", "use"),
                 questionary.Choice("Create a new prompt (copy of the active one)", "new"),
                 questionary.Choice("Open the prompts folder", "folder"),
-                questionary.Choice("Restore the original chat/busy prompts", "reset"),
+                questionary.Choice("Restore the original prompts", "reset"),
                 questionary.Choice("Back", "back"),
             ],
         ).ask()
         if choice in (None, "back"):
             return
         if choice == "edit":
-            actions.edit_prompt(home, active)
+            actions.edit_prompt(active)
         elif choice == "use":
             prompts = actions.list_prompts(home)
             picked = questionary.select("Use which prompt?", choices=[p.stem for p in prompts]).ask()
@@ -117,14 +130,14 @@ def _prompts_menu(home: Home) -> None:
             if name and (path := actions.new_prompt(home, name, active)):
                 if questionary.confirm(f"Use {path.stem} now?", default=True).ask():
                     actions.use_prompt(home, path.stem)
-                actions.edit_prompt(home, path)
+                actions.edit_prompt(path)
         elif choice == "folder":
             if not open_folder(home.prompts_dir):
                 console.print(str(home.prompts_dir))
         elif choice == "reset":
             if questionary.confirm(
-                "Overwrite chat.txt and busy.txt with the original versions? Your edits to them are lost "
-                "(other prompt files are kept).",
+                f"Overwrite {' and '.join(default_prompt_names())} with the original version? Your edits to it "
+                "are lost (other prompt files are kept).",
                 default=False,
             ).ask():
                 restored = restore_default_prompts(home)

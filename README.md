@@ -7,12 +7,15 @@ Out of the box it does two things:
 
 **1. AI auto-reply.** When someone sends you a message in a **private chat**, a **local LLM**
 (running on your own computer through [Ollama](https://ollama.com)) reads the recent
-conversation and **chats back as you**: it answers, reacts and asks things back, like a real
-conversation. You can switch it to a "you're busy, I'll get back to you" style instead. If the
-LLM isn't available, it falls back to the fixed text `brate radim`. Groups, channels, bots and Telegram's own service account
-are ignored. See [AI auto-reply](#ai-auto-reply).
+conversation, including photos, and **chats back as you**. What it says comes from a plain-text
+prompt. The included one, `prompts/chat.txt`, is a sales script for a Reddit promotion service:
+it qualifies the client step by step and, at the key point, **hands the chat over to you**. It
+stops replying and alerts another Telegram account of your choice. Replies wait a random few
+minutes and get small typos, so they read like a person typing. If the LLM isn't available,
+it falls back to the fixed text `brate radim`. Groups, channels, bots and Telegram's own
+service account are ignored. See [AI auto-reply](#ai-auto-reply).
 
-**2. Commands.** Three example commands that only react to messages sent *from your account*,
+**2. Commands.** A few commands that only react to messages sent *from your account*,
 so nobody else can trigger them:
 
 | Command      | What it does                                                            |
@@ -20,6 +23,8 @@ so nobody else can trigger them:
 | `.ping`      | Edits your message to `pong (N ms)`. Confirms the userbot is running.   |
 | `.id`        | Shows the current chat's ID. As a reply, also shows the sender/message ID. |
 | `.help`      | Lists all available commands.                                           |
+| `.pause` / `.resume` | Stop / restart the AI in a chat (or `.resume <chat id>`). See [Handoff to you](#handoff-to-you). |
+| `.paused`    | Lists the chats the AI has handed over to you.                          |
 
 It has a menu-driven terminal interface (setup wizard, prompt editing, settings, model
 downloads, diagnostics), and can be sent to testers as a zip that runs on Windows, macOS and
@@ -34,9 +39,10 @@ follow [docs/TESTERS.md](docs/TESTERS.md).
   has it act as you on Telegram (no password or code needed). Never share it, commit it, or
   upload it anywhere. `.gitignore` already excludes it.
 - **Keep `API_ID` / `API_HASH` private.** Same rules as a password.
-- **The AI speaks to real people as you.** It's told not to make promises, invent plans or
-  share personal info, but a small model can still say something odd. Read
-  [AI auto-reply](#ai-auto-reply) and consider starting with an allowlist (`LLM_ALLOWED_CHATS`).
+- **The AI speaks to real people as you.** The prompt tells it to stick to the facts it's
+  given and hand the chat to you at the key point, but a small model can still say something
+  odd. Read [AI auto-reply](#ai-auto-reply) and consider starting with an allowlist
+  (`LLM_ALLOWED_CHATS`).
 - **Stay within Telegram's rules.** Userbots are allowed, but spam, mass-messaging, mass-joining,
   or scraping can get your account **limited or banned**. Telegram also enforces rate limits
   ("FloodWait"). Telethon waits automatically for short ones; don't try to work around them.
@@ -127,15 +133,12 @@ API_HASH=your_api_hash
 (`python -m userbot setup` asks for them and writes them into `.env` for you.)
 
 The prompt, **`prompts/chat.txt`**, is a plain text script that's sent to the model as-is.
-Read it and adapt it, especially the *About {name}* lines:
+Read it and adapt it, especially the `<facts>` (prices, what you need from the client) and
+`<handoff>` (when the AI must stop and alert you) sections. See [The prompt](#the-prompt).
+**Testers get these files as they are** (see [Sending it to testers](#sending-it-to-testers)).
 
-- **Gender:** Serbian grammar needs it ("bio sam" vs "bila sam"). Without it the model
-  guesses differently from one reply to the next.
-- **Where you live, work/school, interests, how you write:** this is what the bot talks
-  about. With nothing there it gives vague answers or makes small things up. Only write
-  what you're fine with *anyone* who messages you learning. See
-  [Conversation vs. busy mode](#conversation-vs-busy-mode).
-- **Testers get these files as they are** (see [Sending it to testers](#sending-it-to-testers)).
+For the handoff alerts, also set `HANDOFF_NOTIFY_CHAT` to your **other** account's `@username`
+(see [Handoff to you](#handoff-to-you)).
 
 All other settings are optional:
 
@@ -153,11 +156,21 @@ All other settings are optional:
 | `LLM_ENABLED`         | `true`        | `false` = always use the fixed `AUTO_REPLY_TEXT`.         |
 | `LLM_MODEL`           | `qwen3.5:9b`  | Any model you've pulled in Ollama (`ollama list`), e.g. `qwen3.5:4b`, `gemma4:12b`. |
 | `LLM_HOST`            | `http://localhost:11434` | Where Ollama runs.                             |
-| `LLM_SYSTEM_PROMPT_FILE` | `prompts/chat.txt` | The AI's instructions. `prompts/chat.txt` = hold a conversation as you, `prompts/busy.txt` = say you're busy. Relative to the data folder (the project folder when running from source), or an absolute path. |
+| `LLM_SYSTEM_PROMPT_FILE` | `prompts/chat.txt` | The AI's instructions (see [The prompt](#the-prompt)). Relative to the data folder (the project folder when running from source), or an absolute path. |
 | `LLM_HISTORY_LIMIT`   | `20`          | How many recent messages of the chat the AI sees. More = better memory of the conversation, slightly slower. |
 | `LLM_TIMEOUT`         | `60`          | Seconds to wait for the AI before sending the fixed text instead. |
 | `LLM_ALLOWED_CHATS`   | *(empty)*     | Comma-separated chat IDs that get AI replies. Empty = everyone. Others get the fixed text. Find IDs with `.id`. |
 | `LLM_REPLY_LANGUAGE`  | *(empty)*     | Force every AI reply into one language, e.g. `English`. Empty = whatever the prompt says. See [Reply language](#reply-language). |
+| `AUTO_REPLY_DELAY_ENABLED` | `true`   | `false` = ignore the two delay settings and reply within ~2 seconds (still one reply to a burst of messages). Handy while testing. |
+| `AUTO_REPLY_DELAY_MAX` | `0`          | If larger than `AUTO_REPLY_DELAY`, each reply waits a random time between the two (e.g. `180`–`600` = 3 to 10 minutes). `0` = always `AUTO_REPLY_DELAY`. |
+| `LLM_TYPO_RATE`       | `0`           | Share of words (0–1) that get a small typo in AI replies, e.g. `0.03`. `0` = no typos. |
+| `LLM_VISION`          | `true`        | Show the AI the photos people send (needs a model that can see images, like `qwen3.5`). |
+| `LLM_MAX_IMAGES`      | `3`           | How many of the most recent photos in the chat the AI sees. |
+| `HANDOFF_NOTIFY_CHAT` | *(empty)*     | Who gets the alert when the AI hands a chat over to you: an `@username` (best), or the phone/ID of a contact. Empty = your Saved Messages. See [Handoff to you](#handoff-to-you). |
+| `HANDOFF_CLIENT_MESSAGE` | *(empty)*  | Sent to the person when the AI hands the chat over. Empty = send nothing. |
+
+`.env.example` (the template for new settings files) sets the delay to 3–10 minutes, typos to
+`0.03` and a holding message, as the sales prompt asks.
 
 ### 5. First run / log in
 
@@ -194,10 +207,12 @@ How a reply is produced (`userbot/autoreply.py` + `userbot/llm.py`):
 
 ```
 Someone DMs you
-   └─ wait AUTO_REPLY_DELAY seconds (restarts if they send another message)
-        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat
+   └─ chat paused (handed over to you)? → do nothing
+   └─ wait AUTO_REPLY_DELAY..AUTO_REPLY_DELAY_MAX seconds (restarts if they send another message)
+        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat (+ the newest LLM_MAX_IMAGES photos)
              └─ show "typing…" while the local model writes a reply   (Ollama, on your machine)
-                  └─ send the reply (plain message, or quoting theirs if AUTO_REPLY_QUOTE=true)
+                  ├─ reply contains [[HANDOFF]] → pause the chat, send HANDOFF_CLIENT_MESSAGE, alert you
+                  └─ remove markdown, add typos (LLM_TYPO_RATE), send the reply
                        └─ if anything fails → send AUTO_REPLY_TEXT instead
 ```
 
@@ -215,64 +230,96 @@ Someone DMs you
   After that, 1–3 s. Ollama unloads the model after 5 minutes idle to free the ~8 GB.
 - **One at a time.** If several people write at once, replies are generated one after another.
 
-### Conversation vs. busy mode
+### What the prompt does vs. what the code does
 
-The AI's behaviour comes entirely from a plain-text prompt file in `prompts/`. `{name}` is
-replaced by your Telegram first name. Two are included:
+The model can only write text. Anything about timing, seeing photos or stopping a chat has
+to be done in code. This is how the sales script in `prompts/chat.txt` is split:
 
-| File | Behaviour | Example |
+| The script asks for | Done by | How |
 |---|---|---|
-| **`prompts/chat.txt`** (default) | Chats **as you**, in first person. It answers, reacts, jokes, has opinions and asks questions back. | *"eee sta ima"* → *"Not much, just chilling. You good?"* |
-| `prompts/busy.txt` | A polite stand-in. It says you're not around and will reply later. | *"eee sta ima"* → *"Aleksa trenutno nije tu, javiće ti se kasnije."* |
+| Casual, friendly, not AI-sounding; the conversation steps, niche/Reddit rules, pricing | Prompt | `prompts/chat.txt` |
+| Typos | Code | `LLM_TYPO_RATE` swaps, drops or doubles a letter in a few words. Small models are bad at typos on purpose. |
+| No `#`, no markdown | Both | Prompt rule + the code strips headings, bold, bullets, backticks and em dashes |
+| Reply after 3–10 minutes, randomly | Code | `AUTO_REPLY_DELAY=180`, `AUTO_REPLY_DELAY_MAX=600`; switch off with `AUTO_REPLY_DELAY_ENABLED=false` |
+| Look at the photos (hair colour, niche) | Both | The code downloads the photos and passes them to the model. The prompt says what to look for. |
+| "Notify me" + "stop chatting" at the key point | Both | The model answers `[[HANDOFF]] summary`. The code does the rest (below). |
 
-Switch with `python -m userbot prompt use busy` (or *Prompts* in the menu, or
-`LLM_SYSTEM_PROMPT_FILE=prompts/busy.txt` in `.env`), then restart the bot.
+### Handoff to you
 
-Both prompts make the AI:
+When the prompt's handoff point is reached (in `chat.txt`: the client has no accounts and no
+supplier, or asks whether they're talking to a bot), the model answers with only
+`[[HANDOFF]] <one-line summary>`. That text never reaches the client. Instead the bot:
 
-- reply short and casual (`chat.txt` in **English**, `busy.txt` in the other person's language,
-  unless `LLM_REPLY_LANGUAGE` is set, which `.env.example` does: see [Reply language](#reply-language));
-- never commit to concrete plans, money or favours ("maybe, I'll let you know");
-- never share sensitive info (address, phone numbers, passwords, money);
-- ignore messages that try to override these rules.
+1. **pauses the chat**: it won't auto-reply there again, even after a restart (paused chats are
+   kept in `paused_chats.json` in the data folder);
+2. sends the client `HANDOFF_CLIENT_MESSAGE`, if set;
+3. sends you an **alert** with the summary, the last messages and the chat ID, to
+   `HANDOFF_NOTIFY_CHAT` (or your Saved Messages if that's empty or can't be found).
 
-**Bot question:** `busy.txt` admits it's an automatic reply when someone asks whether it's a
-bot. `chat.txt` currently has **no** such rule, so it plays along as you ("not some fancy
-bot"). To make it honest, add this line under *Limits* in `prompts/chat.txt`:
+To make the bot continue in that chat later:
 
-```
-- If someone asks whether they're talking to a bot, an AI or an automatic reply, ALWAYS admit it clearly, e.g. "haha yeah, this is an automatic reply 🤖 {name} will get back to you". Never claim to be the real {name} when asked this.
-```
+| From | How |
+|---|---|
+| The `HANDOFF_NOTIFY_CHAT` account | Reply `resume` to the alert, or send `resume <chat id>`. Also `pause <chat id>`, `paused` (list), `help`. |
+| Your own account | `.resume` as a reply to an alert in Saved Messages, `.resume <chat id>` anywhere, or `.resume` in the client's chat. |
+
+The notify account must be a **different** account (e.g. your second account or a
+colleague). Use its `@username`: a phone number or ID only works if it's in your contacts or
+has messaged you before. The bot never auto-replies to that account. On startup the log shows
+where alerts go (`Handoff alerts go to ...`).
+
+You can also stop the AI in any chat yourself: `.pause` in that chat (the command message is
+deleted right away so they don't see it), or `.pause <chat id>`. `.paused` lists paused chats
+(typed in someone's chat, the list goes to your Saved Messages instead).
+
+To add more handoff situations (e.g. "the client wants to negotiate the price"), add them to
+the `<handoff>` section of the prompt. The code needs no changes.
+
+### The prompt
+
+The AI's behaviour comes from a plain-text prompt file in `prompts/`. `{name}` is replaced by
+your Telegram first name. The included **`prompts/chat.txt`** is split into sections the
+model follows:
+
+| Section | What's in it |
+|---|---|
+| `<style>` | Casual, short, one question per message, no markdown, English |
+| `<conversation_flow>` | The steps: number of models → photos → niche → free/paid and price → Reddit history → pricing → accounts |
+| `<photos>` | What to say about a niche look, or what to ask when there's none |
+| `<reddit_history>` | Ask for the old subreddits, explain why reposting the same photos gets bans |
+| `<facts>` | Prices, weekly content, the 3 accounts, when results show. The model is told not to invent anything else. |
+| `<handoff>` | When to stop and answer `[[HANDOFF]] summary` instead (see [Handoff to you](#handoff-to-you)) |
+| `<example>` | One full example conversation, ending with a handoff |
+
+Things the model can't do on its own (timing, typos, stopping) are settings, not prompt
+lines. See [What the prompt does vs. what the code does](#what-the-prompt-does-vs-what-the-code-does).
+
+**Keep in mind:**
+
+- Everything in the prompt can end up in a reply to **anyone** who messages you. Don't put
+  secrets in a prompt. Clever messages can sometimes make a model repeat its instructions.
+- The AI also sees its own earlier replies. If a chat is full of old "brate radim" replies,
+  it may keep that tone for a few messages.
+- Prompt edits apply to the **next reply**, no restart needed (the file is re-read when it
+  changes). Try changes first with the [playground](#b-chat-with-the-ai-in-your-terminal-no-telegram).
+- You can write your own prompt file (e.g. `prompts/work.txt`, or *Prompts → Create a new
+  prompt* in the menu) and switch with `python -m userbot prompt use work`. Keep a `<handoff>`
+  section with the `[[HANDOFF]]` rule if you want handoffs in it too.
+- **Data folders keep their copy of the prompt.** When `chat.txt` changes in the repository,
+  existing data folders (testers') keep the old one until *Prompts → Restore the original
+  prompts* in the menu.
 
 ### Reply language
 
-`prompts/chat.txt` tells the AI to always answer in **English**, and `.env` sets
+`prompts/chat.txt` tells the AI to reply in **English**, and `.env.example` sets
 `LLM_REPLY_LANGUAGE=English`. You need both. Testing showed that a small model copies the
 language of the chat, *including its own earlier replies*. With the prompt alone, it still
 answered Serbian messages in Serbian about half the time in chats that already had Serbian
 replies. `LLM_REPLY_LANGUAGE` adds a short reminder right after the chat history, just before
 the model answers, and with it every test reply was in English.
 
-To get replies in the other person's language again, empty `LLM_REPLY_LANGUAGE=` in `.env`,
-and change the `LANGUAGE:` and `FINAL REMINDER:` lines in `prompts/chat.txt`.
-
-**Making the conversation sound like you.** The chat prompt only knows what's in its
-*About {name}* section, so fill that in: gender, city, work/school, interests, and especially
-**how you write** (e.g. *"lowercase, short, often says 'brate' and 'ma'"*). For facts that
-aren't listed, it's told to stay vague and turn the question back ("nothing special, you?").
-A small model still slips sometimes, e.g. claiming it watched a game. The more you fill in,
-the less it has to make up.
-
-**Keep in mind:**
-
-- Everything in *About {name}* can end up in a reply to **anyone** who messages you. Don't put
-  secrets in a prompt. Clever messages can sometimes make a model repeat its instructions.
-- The AI also sees its own earlier replies. If a chat is full of old "brate radim" or "I'm
-  busy" replies, it may keep that tone for a few messages.
-- Prompt edits apply to the **next reply**, no restart needed (the file is re-read when it
-  changes). Try changes first with the [playground](#b-chat-with-the-ai-in-your-terminal-no-telegram).
-- You can write your own prompt file (e.g. `prompts/work.txt`) and point
-  `LLM_SYSTEM_PROMPT_FILE` at it.
+To get replies in the other person's language, empty `LLM_REPLY_LANGUAGE=` in `.env` and
+remove the "Reply in English" line from the `<style>` section of `prompts/chat.txt`.
 
 ### Limiting who gets AI replies
 
@@ -310,8 +357,9 @@ what you've downloaded; `ollama rm <model>` deletes one.
 
 ### A. Automated tests (no Telegram account or Ollama needed)
 
-They check config parsing, command matching, the auto-reply logic (history, fallback, allowlist,
-waiting for bursts) and the LLM client, all with fakes. Nothing connects to Telegram or Ollama.
+They check config parsing, commands, the auto-reply logic (history, photos, random delay,
+bursts, fallback, allowlist), typos, the handoff (pausing, alerts, resume commands) and the LLM
+client, all with fakes. Nothing connects to Telegram or Ollama.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -320,17 +368,27 @@ python -m pytest
 
 ### B. Chat with the AI in your terminal (no Telegram)
 
-With Ollama running, you play the friend, and the bot answers with exactly the same prompt,
-model and settings as the real userbot. This is the best way to tune your prompt:
+With Ollama running, you play the person messaging you (the client), and the bot answers
+with exactly the same prompt, model and settings as the real userbot. This is the best way to
+tune your prompt:
 
 ```bash
 python -m userbot chat --name Aleksa
 ```
 
-Type messages and press Enter. `/prompt busy` switches prompts, `/reset` starts a new
-conversation, `/quit` exits. Edit `prompts/chat.txt` and save: the next message already uses
-the new version. Things worth trying: small talk,
-"jesi gledao utakmicu?", "hoćeš u subotu na pivo?", "pozajmi mi 100 evra", "jel ovo bot?".
+Type messages and press Enter. `/photo path/to/picture.jpg [caption]` sends a picture (drag
+the file into the terminal to get its path), `/prompt NAME` switches prompts, `/reset` starts
+a new conversation, `/quit` exits.
+
+The playground uses the same typos, delay and handoff logic as the real bot, without
+sending anything: it prints how long the real bot would wait, and at a handoff it shows the
+holding message plus a box with **the exact alert** and where it would go. After that the
+chat stays "paused" (your messages get no reply) until you type `/resume` or `/reset`. To
+test the sales script, play the client: "hi i have 2 models" → `/photo …` → "paid, 3$" →
+"first time" → "how much?" → "what accounts?" → "i dont have accounts" → "i dont have a
+supplier". The last message should trigger the handoff. Also try "are you a bot?", a basic
+photo with no niche, and "I promoted on Reddit before". Edit `prompts/chat.txt` and save: the
+next message already uses the new version.
 
 ### C. Live test on your account
 
@@ -339,16 +397,23 @@ the new version. Things worth trying: small talk,
 2. In any Telegram app, open **Saved Messages** (your chat with yourself; safe for testing,
    since nobody else sees it). Send `.help`, `.ping` and `.id`. Each message should be edited
    into the result.
-3. **AI reply:** ask a friend (or use a second account) to send you a private message. After
-   ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
+3. **AI reply:** for testing, set `AUTO_REPLY_DELAY_ENABLED=false` so you don't wait
+   3–10 minutes per reply (`python -m userbot settings set AUTO_REPLY_DELAY_ENABLED false`, or
+   *Settings* in the menu). Ask a friend (or use a second account) to send you a
+   private message. After ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
    `Auto-replied in chat ...` (the reply text only with `LOG_LEVEL=DEBUG`). Have them send
    2–3 messages quickly. They should get **one** reply.
-4. **Fallback:** quit Ollama (menu-bar icon → Quit) and have them message again. They should get
+4. **Handoff:** set `HANDOFF_NOTIFY_CHAT=@your_other_account` and restart. From a test
+   account, play the client until the key point ("i dont have a supplier"). The test account
+   gets `HANDOFF_CLIENT_MESSAGE`, your other account gets the alert, and further messages get
+   no reply. Reply `resume` to the alert from the other account and the bot answers again.
+5. **Fallback:** quit Ollama (menu-bar icon → Quit) and have them message again. They should get
    `brate radim`, and the terminal shows a warning. Reopen Ollama afterwards.
-5. Make sure commands **ignore other people**: ask the friend to send you `.ping`. They get an
+6. Make sure commands **ignore other people**: ask the friend to send you `.ping`. They get an
    auto-reply, but the command itself does nothing.
-6. Make sure groups are ignored: when someone writes in a group you're in, nothing is sent.
-7. Use `LOG_LEVEL=DEBUG` in `.env` for more detail.
+7. Make sure groups are ignored: when someone writes in a group you're in, nothing is sent.
+8. Use `LOG_LEVEL=DEBUG` in `.env` for more detail.
+9. Turn the delay back on (`AUTO_REPLY_DELAY_ENABLED=true`) when you're done.
 
 If nothing happens, check that the terminal says `Logged in as ...`, that you used the right
 prefix, and that the command is the **whole** message (`.ping`, not `hey .ping`).
@@ -377,8 +442,9 @@ Settings, prompts, the login and logs live in one **data folder** (see `userbot/
   - macOS: `~/Library/Application Support/TelegramUserbot`
   - Linux: `~/.local/share/TelegramUserbot`
 
-  It holds `settings.env` (made from `.env.example`), `prompts/`, `sessions/` and `logs/`. The
-  default prompts are copied in on first run and never overwritten.
+  It holds `settings.env` (made from `.env.example`), `prompts/`, `sessions/`, `logs/` and,
+  once a chat has been handed over to you, `paused_chats.json`. The default prompts are copied
+  in on first run and never overwritten.
 - **`--home DIR` or `USERBOT_HOME=DIR`** picks any other folder, e.g. to test a fresh setup
   without touching your own.
 
@@ -432,15 +498,17 @@ telegram-bot/
 │   ├── doctor.py        # `doctor`: checks everything and suggests fixes
 │   ├── ui.py            # Terminal output, logging, opening files/folders
 │   ├── commands.py      # @command decorator + wiring into Telethon
-│   ├── autoreply.py     # Auto-reply to incoming private messages (delay, history, fallback)
+│   ├── autoreply.py     # Auto-reply to incoming private messages (delay, history, photos, fallback)
+│   ├── handoff.py       # [[HANDOFF]] marker, paused chats, alerts, remote resume/pause
+│   ├── humanize.py      # Removes markdown and adds typos to AI replies
 │   ├── llm.py           # Talks to the local model through Ollama; reloads the prompt on change
 │   ├── playground.py    # Terminal chat with the AI for testing (python -m userbot chat)
 │   └── handlers/
 │       ├── __init__.py  # Imports handler modules so their commands register
-│       └── basic.py     # .ping, .id, .help
+│       ├── basic.py     # .ping, .id, .help
+│       └── handoff.py   # .pause, .resume, .paused
 ├── prompts/
-│   ├── chat.txt         # Default: chat as you
-│   └── busy.txt         # Alternative: "not around, will reply later"
+│   └── chat.txt         # Default: the Reddit promotion sales script
 ├── packaging/launchers/ # Start Userbot.bat / start.sh (also used as Start Userbot.command)
 ├── scripts/
 │   └── build_bundle.py  # Builds the tester zips into dist/
@@ -532,11 +600,14 @@ like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` fi
 | Replies are always `brate radim` | Look for warnings in the terminal. Also check `LLM_ENABLED` and `LLM_ALLOWED_CHATS`. |
 | `No reply from ... within 60s` | The Mac is short on memory or busy. Close apps, use `qwen3.5:4b`, or raise `LLM_TIMEOUT`. |
 | AI answers in the wrong language | Set `LLM_REPLY_LANGUAGE` in `.env` (e.g. `English`) and restart. See [Reply language](#reply-language). |
-| AI uses the wrong gender for you | Fill in the gender line in `prompts/chat.txt` (or `busy.txt`). Applies to the next reply. |
-| AI only says you're busy | You're using `prompts/busy.txt`. Run `python -m userbot prompt use chat` and restart the bot. Old "busy" replies in the chat can also keep that tone for a few messages. |
-| AI makes up things about you | Fill in more of *About {name}* in `prompts/chat.txt`. |
+| AI makes up prices or promises | Make sure the answer is in the `<facts>` section of `prompts/chat.txt`. It's told to use only those. |
+| Prompt changes in the repository don't show up for a tester | Their data folder keeps its own copy. Menu → *Prompts* → *Restore the original prompts*. |
+| No handoff alert arrives | Check the startup log for `Handoff alerts go to ...`. If `HANDOFF_NOTIFY_CHAT` wasn't found, alerts go to your Saved Messages. Use an `@username`. Test the trigger in the playground. |
+| The bot doesn't reply in one chat | It may be paused (handed over to you). Send `.paused` in Saved Messages to check, `.resume <chat id>` to continue. |
+| Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes by default). Set `AUTO_REPLY_DELAY_ENABLED=false` while testing. |
+| AI talks about a photo it can't see | The model can't read images (the log says so at startup). Use `qwen3.5`, or set `LLM_VISION=false`. |
 | AI replies sound off | Edit the prompt (tone, how you write, example phrases), test in the playground, or try another model. |
-| Not sure what's wrong | `python -m userbot doctor` checks settings, prompt, Ollama, model, memory and the login. |
+| Not sure what's wrong | `python -m userbot doctor` checks settings, the prompt (and its handoff rule), the reply delay, where alerts go, Ollama, the model, memory and the login. |
 
 ## Useful links
 

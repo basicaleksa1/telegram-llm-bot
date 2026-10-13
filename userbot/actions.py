@@ -167,7 +167,7 @@ def use_prompt(home: Home, name: str) -> bool:
     return True
 
 
-def edit_prompt(home: Home, path: Path) -> None:
+def edit_prompt(path: Path) -> None:
     console.print(f"Opening [cyan]{escape(str(path))}[/]")
     console.print(
         "[dim]Save the file and the change applies to the next reply, no restart needed. "

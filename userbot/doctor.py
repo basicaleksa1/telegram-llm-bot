@@ -7,7 +7,9 @@ from rich.markup import escape
 from rich.table import Table
 
 from . import bot, ollama_setup
-from .config import ConfigError, load_config
+from .autoreply import QUICK_REPLY_DELAY
+from .config import Config, ConfigError, load_config
+from .handoff import HANDOFF_MARKER, PausedChats, has_handoff_marker
 from .paths import Home
 from .ui import console
 
@@ -49,6 +51,25 @@ async def run_checks(home: Home, online: bool = True) -> list[Check]:
         add(Check("Prompt", WARN, f"{prompt.name} is empty", "Write instructions into it, or the built-in default is used."))
     else:
         add(Check("Prompt", OK, prompt.name))
+        if not has_handoff_marker(prompt.read_text(encoding="utf-8")):
+            add(Check(
+                "Handoff rule", WARN, f"{prompt.name} never asks for {HANDOFF_MARKER}, so the AI never hands a chat to you",
+                "Menu: Prompts → Restore the original prompts, or add a <handoff> section.",
+            ))
+
+    if not config.auto_reply_delay_enabled:
+        add(Check(
+            "Reply delay", WARN, f"off: replies within {QUICK_REPLY_DELAY:.0f} s (AUTO_REPLY_DELAY_ENABLED=false)",
+            "Fine for testing. Set it back to true before real use.",
+        ))
+    elif config.auto_reply_delay_max > config.auto_reply_delay:
+        add(Check("Reply delay", OK, f"random {config.auto_reply_delay:.0f}-{config.auto_reply_delay_max:.0f} s"))
+    else:
+        add(Check("Reply delay", OK, f"{config.auto_reply_delay:.0f} s"))
+
+    paused = len(PausedChats(config.paused_chats_file).items())
+    alerts_to = config.handoff_notify_chat or "your Saved Messages"
+    add(Check("Handoff", OK, f"alerts go to {alerts_to}" + (f"; {paused} chat(s) paused" if paused else "")))
 
     if not config.llm_enabled:
         add(Check("AI", WARN, "turned off (LLM_ENABLED=false)", f"Replies are always {config.auto_reply_text!r}."))
@@ -70,23 +91,23 @@ async def run_checks(home: Home, online: bool = True) -> list[Check]:
     else:
         add(Check("Memory", OK, hw.describe()))
 
-    if not config.has_telegram_credentials:
-        pass
-    elif not bot.has_saved_login(config):
-        add(Check("Telegram login", WARN, "not logged in yet", "Run the setup, or just start the bot: it asks for your phone and code."))
-    elif not online:
-        add(Check("Telegram login", OK, "saved (not verified, --offline)"))
-    else:
-        try:
-            me = await bot.current_account(config)
-        except Exception as e:  # network problems, revoked keys, ...
-            add(Check("Telegram login", WARN, f"couldn't check: {e}", "Check your internet connection."))
-        else:
-            if me is None:
-                add(Check("Telegram login", FAIL, "the saved login is no longer valid", "Log out and start the bot again to log in."))
-            else:
-                add(Check("Telegram login", OK, f"{me.first_name} (@{me.username or '-'})"))
+    if config.has_telegram_credentials:
+        add(await _login_check(config, online))
     return checks
+
+
+async def _login_check(config: Config, online: bool) -> Check:
+    if not bot.has_saved_login(config):
+        return Check("Telegram login", WARN, "not logged in yet", "Run the setup, or just start the bot: it asks for your phone and code.")
+    if not online:
+        return Check("Telegram login", OK, "saved (not verified, --offline)")
+    try:
+        me = await bot.current_account(config)
+    except Exception as e:  # network problems, revoked keys, ...
+        return Check("Telegram login", WARN, f"couldn't check: {e}", "Check your internet connection.")
+    if me is None:
+        return Check("Telegram login", FAIL, "the saved login is no longer valid", "Log out and start the bot again to log in.")
+    return Check("Telegram login", OK, f"{me.first_name} (@{me.username or '-'})")
 
 
 def print_checks(checks: list[Check]) -> None:

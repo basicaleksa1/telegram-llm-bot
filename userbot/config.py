@@ -33,7 +33,9 @@ class Config:
     auto_reply_enabled: bool = True
     auto_reply_text: str = "brate radim"
     auto_reply_cooldown: float = 0.0
+    auto_reply_delay_enabled: bool = True
     auto_reply_delay: float = 3.0
+    auto_reply_delay_max: float = 0.0
     auto_reply_quote: bool = False
 
     llm_enabled: bool = True
@@ -44,6 +46,13 @@ class Config:
     llm_timeout: float = 60.0
     llm_allowed_chats: frozenset[int] = frozenset()
     llm_reply_language: str = ""
+    llm_typo_rate: float = 0.0
+    llm_vision: bool = True
+    llm_max_images: int = 3
+
+    handoff_notify_chat: str = ""
+    handoff_client_message: str = ""
+    paused_chats_file: Path = Path("paused_chats.json")
 
     @property
     def session_path(self) -> Path:
@@ -59,14 +68,16 @@ class Setting:
     """A setting that can be changed from the menu / `userbot settings set`."""
 
     key: str
-    kind: str  # "bool", "text", "seconds", "int", "chats"
+    kind: str  # "bool", "text", "seconds", "int", "number", "chats"
     help: str
 
 
 EDITABLE_SETTINGS = [
     Setting("AUTO_REPLY_ENABLED", "bool", "Reply automatically to private messages (AI or fixed text)."),
     Setting("AUTO_REPLY_TEXT", "text", "Fixed reply, used when the AI is off, not allowed for the chat, or fails."),
+    Setting("AUTO_REPLY_DELAY_ENABLED", "bool", "Wait AUTO_REPLY_DELAY(_MAX) before replying. false = reply within ~2 seconds, handy for testing."),
     Setting("AUTO_REPLY_DELAY", "seconds", "Wait until the person stops typing for this long, then reply once. 0 = reply immediately."),
+    Setting("AUTO_REPLY_DELAY_MAX", "seconds", "If larger than AUTO_REPLY_DELAY, wait a random time between the two instead. 0 = always AUTO_REPLY_DELAY."),
     Setting("AUTO_REPLY_COOLDOWN", "seconds", "Minimum seconds between auto-replies in the same chat. 0 = no limit."),
     Setting("AUTO_REPLY_QUOTE", "bool", "Quote their message above each reply (false looks more like a normal chat)."),
     Setting("LLM_ENABLED", "bool", "Let the local AI write the replies. false = always send the fixed text."),
@@ -74,6 +85,11 @@ EDITABLE_SETTINGS = [
     Setting("LLM_SYSTEM_PROMPT_FILE", "text", "Prompt file the AI follows. Use the Prompts menu to switch."),
     Setting("LLM_REPLY_LANGUAGE", "text", "Force every reply into one language, e.g. English. Empty = whatever the prompt says."),
     Setting("LLM_HISTORY_LIMIT", "int", "How many recent messages of the chat the AI sees."),
+    Setting("LLM_TYPO_RATE", "number", "Share of words (0-1) that get a small typo in AI replies, e.g. 0.03. 0 = no typos."),
+    Setting("LLM_VISION", "bool", "Show the AI the photos people send (the model must support images, like qwen3.5)."),
+    Setting("LLM_MAX_IMAGES", "int", "How many of the most recent photos in the chat the AI sees."),
+    Setting("HANDOFF_NOTIFY_CHAT", "text", "Who gets the alert when the AI hands a chat over to you: @username, phone or ID. Empty = your Saved Messages."),
+    Setting("HANDOFF_CLIENT_MESSAGE", "text", "Sent to the person when the AI hands the chat over to you. Empty = send nothing."),
     Setting("LLM_TIMEOUT", "seconds", "Seconds to wait for the AI before sending the fixed text instead."),
     Setting("LLM_ALLOWED_CHATS", "chats", "Comma-separated chat IDs that get AI replies (find them with .id). Empty = everyone."),
     Setting("COMMAND_PREFIX", "text", "What your commands start with, e.g. . for .ping"),
@@ -157,7 +173,9 @@ def load_config(
         auto_reply_enabled=_parse_bool("AUTO_REPLY_ENABLED", get("AUTO_REPLY_ENABLED"), default=True),
         auto_reply_text=get("AUTO_REPLY_TEXT") or "brate radim",
         auto_reply_cooldown=_parse_seconds("AUTO_REPLY_COOLDOWN", get("AUTO_REPLY_COOLDOWN"), default=0.0),
+        auto_reply_delay_enabled=_parse_bool("AUTO_REPLY_DELAY_ENABLED", get("AUTO_REPLY_DELAY_ENABLED"), default=True),
         auto_reply_delay=_parse_seconds("AUTO_REPLY_DELAY", get("AUTO_REPLY_DELAY"), default=3.0),
+        auto_reply_delay_max=_parse_seconds("AUTO_REPLY_DELAY_MAX", get("AUTO_REPLY_DELAY_MAX"), default=0.0),
         auto_reply_quote=_parse_bool("AUTO_REPLY_QUOTE", get("AUTO_REPLY_QUOTE"), default=False),
         llm_enabled=_parse_bool("LLM_ENABLED", get("LLM_ENABLED"), default=True),
         llm_host=get("LLM_HOST") or "http://localhost:11434",
@@ -167,6 +185,12 @@ def load_config(
         llm_timeout=_parse_seconds("LLM_TIMEOUT", get("LLM_TIMEOUT"), default=60.0),
         llm_allowed_chats=_parse_id_list("LLM_ALLOWED_CHATS", get("LLM_ALLOWED_CHATS")),
         llm_reply_language=get("LLM_REPLY_LANGUAGE"),
+        llm_typo_rate=_parse_fraction("LLM_TYPO_RATE", get("LLM_TYPO_RATE")),
+        llm_vision=_parse_bool("LLM_VISION", get("LLM_VISION"), default=True),
+        llm_max_images=_parse_positive_int("LLM_MAX_IMAGES", get("LLM_MAX_IMAGES"), default=3),
+        handoff_notify_chat=get("HANDOFF_NOTIFY_CHAT"),
+        handoff_client_message=get("HANDOFF_CLIENT_MESSAGE"),
+        paused_chats_file=home.root / "paused_chats.json",
     )
 
 
@@ -188,6 +212,18 @@ def _parse_seconds(key: str, value: str, default: float) -> float:
         return max(float(value), 0.0)
     except ValueError:
         raise ConfigError(f"{key} must be a number of seconds, got {value!r}.") from None
+
+
+def _parse_fraction(key: str, value: str) -> float:
+    if not value:
+        return 0.0
+    try:
+        number = float(value)
+    except ValueError:
+        number = -1.0
+    if not 0.0 <= number <= 1.0:
+        raise ConfigError(f"{key} must be a number from 0 to 1, e.g. 0.03, got {value!r}.")
+    return number
 
 
 def _parse_positive_int(key: str, value: str, default: int) -> int:

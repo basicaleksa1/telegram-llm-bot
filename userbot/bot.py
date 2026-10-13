@@ -4,13 +4,15 @@ import logging
 from pathlib import Path
 
 from telethon import TelegramClient
+from telethon.errors import RPCError
 from telethon.tl.types import User
 
 from . import __version__
 from . import handlers  # noqa: F401  (registers the commands)
-from .autoreply import register_auto_reply
+from .autoreply import AutoReplier, register_auto_reply
 from .commands import register_commands
 from .config import Config, ConfigError
+from .handoff import register_remote_control
 from .llm import LLM
 
 log = logging.getLogger("userbot")
@@ -86,7 +88,7 @@ async def run_bot(config: Config, ask_phone, ask_code, ask_password) -> None:
     client = make_client(config)
     register_commands(client, config)
     llm = LLM(config) if config.llm_enabled else None
-    register_auto_reply(client, config, llm)
+    replier = register_auto_reply(client, config, llm)
 
     try:
         await client.start(
@@ -108,6 +110,35 @@ async def run_bot(config: Config, ask_phone, ask_code, ask_password) -> None:
                 log.warning("LLM not ready: %s. Auto-replies will use %r until it is.", problem, config.auto_reply_text)
             else:
                 log.info("LLM ready: %s via %s, prompt %s", llm.model, llm.host, config.llm_system_prompt_file.name)
+        if replier is not None:
+            await setup_handoff(client, config, replier, me)
         await client.run_until_disconnected()
     finally:
         await client.disconnect()
+
+
+async def setup_handoff(client: TelegramClient, config: Config, replier: AutoReplier, me: User) -> None:
+    """Point handoff alerts at HANDOFF_NOTIFY_CHAT and let that account resume/pause chats."""
+    target = config.handoff_notify_chat
+    if target:
+        try:
+            entity = await client.get_entity(int(target) if target.lstrip("-").isdigit() else target)
+        except (ValueError, TypeError, RPCError) as e:
+            log.warning(
+                "HANDOFF_NOTIFY_CHAT=%r not found (%s). Use an @username; a phone or ID only works if "
+                "the account is in your contacts or has messaged you. Alerts go to Saved Messages.",
+                target,
+                e,
+            )
+        else:
+            if entity.id != me.id:
+                replier.notify_target = entity
+                replier.notify_user_id = entity.id
+                register_remote_control(client, replier.paused, entity.id)
+    if replier.notify_target == "me":
+        log.info("Handoff alerts go to your Saved Messages (reply %sresume to one to resume)", config.command_prefix)
+    else:
+        log.info("Handoff alerts go to %s", target)
+    paused = replier.paused.items()
+    if paused:
+        log.info("%d chat(s) are paused (handed over to you); send %spaused to list them", len(paused), config.command_prefix)
