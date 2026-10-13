@@ -98,7 +98,7 @@ def handoff_event(tmp_path, chat=42, args=None, reply=None):
         is_reply=reply is not None,
         get_reply_message=AsyncMock(return_value=reply),
         pattern_match=SimpleNamespace(group=lambda i: args),
-        client=SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(id=ME))),
+        client=SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(id=ME)), send_message=AsyncMock()),
         edit=AsyncMock(),
         delete=AsyncMock(),
     )
@@ -150,3 +150,15 @@ def test_paused_lists_chats(tmp_path):
     asyncio.run(paused_command(event, ctx))
 
     assert "Pera" in event.edit.await_args.args[0]
+
+
+def test_paused_in_their_chat_sends_the_list_to_saved_messages(tmp_path):
+    event, ctx, paused = handoff_event(tmp_path, chat=42)
+    paused.pause(7, name="Pera")
+
+    asyncio.run(paused_command(event, ctx))
+
+    event.delete.assert_awaited_once()
+    event.edit.assert_not_awaited()
+    to, text = event.client.send_message.await_args.args
+    assert to == "me" and "Pera" in text

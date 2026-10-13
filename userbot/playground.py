@@ -100,7 +100,7 @@ async def chat(config: Config, home: Home, name: str) -> None:
         reply, reason = split_handoff(raw)
         if reason is not None:
             handed_off = True
-            _show_handoff(config, name, reason, history)
+            _show_handoff(config, reason, history)
             continue
         reply = humanize(reply, config.llm_typo_rate, rng) or config.auto_reply_text
         history.append({"role": "assistant", "content": reply})
@@ -138,16 +138,20 @@ def _duration(seconds: float) -> str:
     return f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
 
 
-def _show_handoff(config: Config, name: str, reason: str, history: list[dict]) -> None:
+def _show_handoff(config: Config, reason: str, history: list[dict]) -> None:
+    # The alert shows the chat as it was when the AI stopped, like the real bot's.
+    target = config.handoff_notify_chat or "your Saved Messages"
+    hint = resume_hint(config.command_prefix, to_saved_messages=not config.handoff_notify_chat)
+    alert = format_notification("Playground client", PLAYGROUND_CHAT_ID, reason, history, resume_hint=hint)
+
     if config.handoff_client_message:
+        # In Telegram it's a message in the chat, so after /resume the AI sees it too.
+        history.append({"role": "assistant", "content": config.handoff_client_message})
         console.print(f"[bold magenta]bot:[/] {escape(config.handoff_client_message)}")
         console.print("[dim](the fixed HANDOFF_CLIENT_MESSAGE)[/]")
     else:
         console.print("[dim](HANDOFF_CLIENT_MESSAGE is empty: the person gets no message)[/]")
 
-    target = config.handoff_notify_chat or "your Saved Messages"
-    hint = resume_hint(config.command_prefix, to_saved_messages=not config.handoff_notify_chat)
-    alert = format_notification("Playground client", PLAYGROUND_CHAT_ID, reason, history, resume_hint=hint)
     console.print(Panel(escape(alert), title=f"Handoff alert → {escape(target)}", border_style="yellow"))
     console.print("[dim](the chat is now paused: the real bot stays quiet. /resume to continue, /reset to start over)[/]\n")
 

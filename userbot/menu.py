@@ -77,7 +77,20 @@ def _print_status(home: Home) -> None:
 
     prompt = config.llm_system_prompt_file
     table.add_row("Prompt", escape(prompt.name) + ("" if prompt.exists() else " [red](missing)[/]"))
+
+    if not config.auto_reply_delay_enabled:
+        delay = "[yellow]off[/] (replies within seconds; turn on before real use)"
+    elif config.auto_reply_delay_max > config.auto_reply_delay:
+        delay = f"{_minutes(config.auto_reply_delay)}–{_minutes(config.auto_reply_delay_max)}, random"
+    else:
+        delay = _minutes(config.auto_reply_delay)
+    table.add_row("Reply delay", delay)
+    table.add_row("Handoff alerts", escape(config.handoff_notify_chat or "your Saved Messages"))
     console.print(table)
+
+
+def _minutes(seconds: float) -> str:
+    return f"{seconds / 60:g} min" if seconds >= 60 else f"{seconds:g} s"
 
 
 async def _ai_status(host: str, model: str) -> tuple[bool, bool]:
@@ -106,7 +119,7 @@ def _prompts_menu(home: Home) -> None:
         if choice in (None, "back"):
             return
         if choice == "edit":
-            actions.edit_prompt(home, active)
+            actions.edit_prompt(active)
         elif choice == "use":
             prompts = actions.list_prompts(home)
             picked = questionary.select("Use which prompt?", choices=[p.stem for p in prompts]).ask()
@@ -117,7 +130,7 @@ def _prompts_menu(home: Home) -> None:
             if name and (path := actions.new_prompt(home, name, active)):
                 if questionary.confirm(f"Use {path.stem} now?", default=True).ask():
                     actions.use_prompt(home, path.stem)
-                actions.edit_prompt(home, path)
+                actions.edit_prompt(path)
         elif choice == "folder":
             if not open_folder(home.prompts_dir):
                 console.print(str(home.prompts_dir))

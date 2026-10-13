@@ -24,9 +24,14 @@ from telethon import TelegramClient, events
 log = logging.getLogger(__name__)
 
 HANDOFF_MARKER = "[[HANDOFF]]"
-_MARKER = re.compile(r"\[\[\s*hand\s*-?\s*off\s*\]\]", re.IGNORECASE)
+# Small models sometimes write [HANDOFF] or [[ hand-off ]]: accept those too.
+_MARKER = re.compile(r"\[\[?\s*hand\s*-?\s*off\s*\]\]?", re.IGNORECASE)
 _CHAT_LINE = re.compile(r"^chat (-?\d+)$", re.MULTILINE)
 NOTIFICATION_HISTORY = 8
+
+
+def has_handoff_marker(text: str) -> bool:
+    return _MARKER.search(text) is not None
 
 
 def split_handoff(text: str) -> tuple[str, str | None]:

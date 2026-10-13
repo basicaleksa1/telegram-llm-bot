@@ -123,7 +123,7 @@ def _prompt(home: Home) -> None:
     )
     actions.use_prompt(home, choice.stem)
     if ask(questionary.confirm("Open it in an editor now to read or change it?", default=False)):
-        actions.edit_prompt(home, choice)
+        actions.edit_prompt(choice)
 
 
 def _login(home: Home) -> None:

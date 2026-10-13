@@ -80,7 +80,6 @@ def doctor_command(offline: bool = typer.Option(False, "--offline", help="Don't 
         raise typer.Exit(1)
 
 
-
 @app.command()
 def login() -> None:
     """Log in to Telegram (only needed once)."""
@@ -131,7 +130,7 @@ def prompt_edit(name: str | None = typer.Argument(None, help="Prompt to edit (de
     if not path.exists():
         console.print(f"[red]{escape(str(path))} doesn't exist.[/]")
         raise typer.Exit(1)
-    actions.edit_prompt(home, path)
+    actions.edit_prompt(path)
 
 
 @prompt_app.command("show")
@@ -152,7 +151,7 @@ def prompt_new(name: str, use: bool = typer.Option(True, help="Make it the activ
         raise typer.Exit(1)
     if use:
         actions.use_prompt(home, path.stem)
-    actions.edit_prompt(home, path)
+    actions.edit_prompt(path)
 
 
 @prompt_app.command("reset")

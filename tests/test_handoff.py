@@ -36,6 +36,15 @@ def test_marker_is_found_case_and_space_insensitive_and_mid_text():
     assert reason == "no supplier"
 
 
+def test_marker_with_single_brackets_or_a_dash_is_accepted():
+    assert split_handoff("[HANDOFF] no supplier")[1] == "no supplier"
+    assert split_handoff("[[Hand-Off]] no supplier")[1] == "no supplier"
+
+
+def test_the_word_handoff_without_brackets_is_not_a_marker():
+    assert split_handoff("we can do a handoff later")[1] is None
+
+
 def test_marker_without_summary_still_hands_off():
     assert split_handoff("[[HANDOFF]]")[1] == "the AI handed this chat over to you"
 
@@ -149,7 +158,7 @@ def test_remote_control_listens_only_to_the_alert_account(tmp_path):
     client = MagicMock()
     register_remote_control(client, PausedChats(tmp_path / "p.json"), controller_id=999)
 
-    handler, builder = client.add_event_handler.call_args.args
+    _, builder = client.add_event_handler.call_args.args
     assert builder.incoming is True
     assert builder.from_users == 999
 

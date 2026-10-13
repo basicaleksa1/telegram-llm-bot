@@ -269,7 +269,8 @@ has messaged you before. The bot never auto-replies to that account. On startup 
 where alerts go (`Handoff alerts go to ...`).
 
 You can also stop the AI in any chat yourself: `.pause` in that chat (the command message is
-deleted right away so they don't see it), or `.pause <chat id>`. `.paused` lists paused chats.
+deleted right away so they don't see it), or `.pause <chat id>`. `.paused` lists paused chats
+(typed in someone's chat, the list goes to your Saved Messages instead).
 
 To add more handoff situations (e.g. "the client wants to negotiate the price"), add them to
 the `<handoff>` section of the prompt. The code needs no changes.
@@ -606,7 +607,7 @@ like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` fi
 | Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes by default). Set `AUTO_REPLY_DELAY_ENABLED=false` while testing. |
 | AI talks about a photo it can't see | The model can't read images (the log says so at startup). Use `qwen3.5`, or set `LLM_VISION=false`. |
 | AI replies sound off | Edit the prompt (tone, how you write, example phrases), test in the playground, or try another model. |
-| Not sure what's wrong | `python -m userbot doctor` checks settings, prompt, Ollama, model, memory and the login. |
+| Not sure what's wrong | `python -m userbot doctor` checks settings, the prompt (and its handoff rule), the reply delay, where alerts go, Ollama, the model, memory and the login. |
 
 ## Useful links
 

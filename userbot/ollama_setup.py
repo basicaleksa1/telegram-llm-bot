@@ -232,7 +232,6 @@ async def has_model(host: str, model: str) -> bool:
 
 @dataclass
 class PullProgress:
-    status: str
     completed: int
     total: int
 
@@ -246,4 +245,4 @@ async def pull_model(host: str, model: str) -> AsyncIterator[PullProgress]:
         if part.digest and part.total:
             totals[part.digest] = part.total
             done[part.digest] = part.completed or 0
-        yield PullProgress(status=part.status or "", completed=sum(done.values()), total=sum(totals.values()))
+        yield PullProgress(completed=sum(done.values()), total=sum(totals.values()))

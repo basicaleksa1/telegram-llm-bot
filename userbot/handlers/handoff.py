@@ -58,4 +58,10 @@ async def resume(event: events.NewMessage.Event, ctx: Context) -> None:
 
 @command("paused", "List the chats the AI has handed over to you")
 async def paused(event: events.NewMessage.Event, ctx: Context) -> None:
-    await event.edit(PausedChats(ctx.config.paused_chats_file).describe())
+    text = PausedChats(ctx.config.paused_chats_file).describe()
+    if event.chat_id == (await event.client.get_me()).id:
+        await event.edit(text)
+    else:
+        # Typed in someone's chat: they mustn't see your list. Send it to Saved Messages.
+        await event.delete()
+        await event.client.send_message("me", text)
