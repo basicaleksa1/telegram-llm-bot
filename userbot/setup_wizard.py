@@ -12,7 +12,7 @@ from rich.panel import Panel
 
 from . import actions
 from .actions import ask
-from .config import write_setting
+from .config import ConfigError, parse_notify_target, write_setting
 from .paths import Home
 from .ui import console
 
@@ -22,11 +22,12 @@ TELEGRAM_APPS_URL = "https://my.telegram.org"
 def run_setup(home: Home) -> None:
     console.print(
         Panel(
-            "This sets up four things:\n"
+            "This sets up five things:\n"
             "  1. Your Telegram API ID and hash (from my.telegram.org)\n"
             "  2. The local AI (Ollama and a model)\n"
             "  3. Which prompt the AI follows\n"
-            "  4. Logging in to your Telegram account\n\n"
+            "  4. Which account gets the handoff alerts\n"
+            "  5. Logging in to your Telegram account\n\n"
             f"[dim]Everything is saved in {escape(str(home.root))}\nPress Ctrl+C to stop; you can run the setup again later.[/]",
             title="Setup",
             expand=False,
@@ -36,6 +37,7 @@ def run_setup(home: Home) -> None:
         ("Telegram API ID and hash", _telegram_credentials),
         ("The local AI", _ai),
         ("Prompt", _prompt),
+        ("Handoff alerts", _handoff_alerts),
         ("Telegram login", _login),
     ]
     for number, (title, step) in enumerate(steps, start=1):
@@ -126,15 +128,47 @@ def _prompt(home: Home) -> None:
         actions.edit_prompt(choice)
 
 
+def _handoff_alerts(home: Home) -> None:
+    config = actions.load(home)
+    current = config.handoff_notify_chat if config else ""
+    console.print(
+        "When the AI reaches the point where you should take over, it stops replying to that person and "
+        "sends you an alert. Choose a [bold]different[/] Telegram account to get it (e.g. your second "
+        "account), so it pops up as a normal notification. From that account you reply [bold]resume[/] to "
+        "an alert to let the AI continue.\n"
+        "[dim]Use its @username (Telegram → Settings → Username). Leave empty to get the alerts in your own "
+        "Saved Messages instead.[/]"
+    )
+
+    def valid(text: str) -> bool | str:
+        try:
+            parse_notify_target(text)
+        except ConfigError as e:
+            return str(e)
+        return True
+
+    answer = ask(questionary.text("Alert account (@username, or empty):", default=current, validate=valid))
+    target = parse_notify_target(answer)
+    write_setting("HANDOFF_NOTIFY_CHAT", target, home)
+    console.print(f"[green]✓ Alerts go to {escape(target)}.[/]" if target else "[green]✓ Alerts go to your Saved Messages.[/]")
+
+
 def _login(home: Home) -> None:
     config = actions.load(home)
     if not config or not config.has_telegram_credentials:
         console.print("[yellow]Skipped: the API ID and hash from step 1 are needed first.[/]")
         return
-    console.print(
-        "Log in with the Telegram account the bot should answer for. You'll get a code in the "
-        "Telegram app, and see a 'new login' notification: that's this program."
-    )
+    if config.telegram_test_servers:
+        console.print(
+            "[yellow]TELEGRAM_TEST_SERVERS is on:[/] log in with a [bold]test account[/] "
+            "(number 99966 2 XXXX, code 22222). It must already exist: create it once in the "
+            "official Telegram app's test mode."
+        )
+    else:
+        console.print(
+            "Log in with the Telegram account the bot should answer for. You'll get a code in the "
+            "Telegram app, and see a 'new login' notification: that's this program."
+        )
     if not ask(questionary.confirm("Log in now?", default=True)):
         console.print("[dim]Skipped. The bot asks when you start it.[/]")
         return

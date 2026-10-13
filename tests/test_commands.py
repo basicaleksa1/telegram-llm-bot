@@ -162,3 +162,12 @@ def test_paused_in_their_chat_sends_the_list_to_saved_messages(tmp_path):
     event.edit.assert_not_awaited()
     to, text = event.client.send_message.await_args.args
     assert to == "me" and "Pera" in text
+
+
+def test_usage_messages_use_the_configured_prefix(tmp_path):
+    event, _, _ = handoff_event(tmp_path, chat=ME)
+    ctx = Context(config=Config(api_id=1, api_hash="x", command_prefix="!", paused_chats_file=tmp_path / "p.json"), commands=COMMANDS)
+
+    asyncio.run(resume(event, ctx))
+
+    assert "!resume" in event.edit.await_args.args[0]

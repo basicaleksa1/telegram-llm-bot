@@ -145,7 +145,7 @@ REMOTE_HELP = (
     "Commands from this account:\n"
     'resume - as a reply to an alert: the bot answers that chat again\n'
     "resume <chat id> - same, by chat ID\n"
-    "pause <chat id> - the bot stops answering that chat\n"
+    "pause <chat id> (or as a reply to an alert) - the bot stops answering that chat\n"
     "paused - list the paused chats"
 )
 

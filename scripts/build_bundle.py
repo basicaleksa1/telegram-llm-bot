@@ -43,10 +43,10 @@ TARGETS = {
 }
 
 # What goes into app/ (relative to the repository). Nothing else is copied.
-APP_FILES = ["pyproject.toml", "uv.lock", ".env.example", "README.md"]
+APP_FILES = ["pyproject.toml", "uv.lock", ".env.example", "README.md", "CHANGELOG.md"]
 APP_DIRS = ["userbot", "prompts"]
 # Never ship these, whatever happens: they hold the developer's own account.
-FORBIDDEN = re.compile(r"(^|/)(\.env|settings\.env|sessions/.*|.*\.session(-journal)?)$")
+FORBIDDEN = re.compile(r"(^|/)(\.env|settings\.env|(\.env|settings\.env)\.before-.*|sessions/.*|.*\.session(-journal)?)$")
 
 
 def main() -> None:

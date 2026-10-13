@@ -24,12 +24,13 @@ so nobody else can trigger them:
 | `.id`        | Shows the current chat's ID. As a reply, also shows the sender/message ID. |
 | `.help`      | Lists all available commands.                                           |
 | `.pause` / `.resume` | Stop / restart the AI in a chat (or `.resume <chat id>`). See [Handoff to you](#handoff-to-you). |
-| `.paused`    | Lists the chats the AI has handed over to you.                          |
+| `.paused`    | Lists the chats where the AI is paused: handed over to you, or paused with `.pause`. |
 
 It has a menu-driven terminal interface (setup wizard, prompt editing, settings, model
 downloads, diagnostics), and can be sent to testers as a zip that runs on Windows, macOS and
-Linux without installing Python. See [Sending it to testers](#sending-it-to-testers); testers
-follow [docs/TESTERS.md](docs/TESTERS.md).
+Linux without installing Python. When a tester starts a newer version, their settings and
+prompt are brought up to date and they're told what changed. See
+[Sending it to testers](#sending-it-to-testers); testers follow [docs/TESTERS.md](docs/TESTERS.md).
 
 ---
 
@@ -95,7 +96,8 @@ pip install cryptg
 
 The quickest way: create `.env` first (`cp .env.example .env`, step 4), then run
 `python -m userbot setup`. It asks for the API ID/hash, installs or starts Ollama, recommends a
-model for your computer and downloads it. (Without a `.env` in the repository, the setup writes
+model for your computer and downloads it, then asks for the prompt, the account that gets
+handoff alerts, and logs you in. (Without a `.env` in the repository, the setup writes
 to the per-user data folder instead; see [Commands and the data folder](#commands-and-the-data-folder).)
 To do it by hand:
 
@@ -148,10 +150,11 @@ All other settings are optional:
 | `SESSION_NAME`   | `userbot` | Session file name in `sessions/`. Use a new name to log in as a different account. |
 | `COMMAND_PREFIX` | `.`       | What commands start with, e.g. `!` makes it `!ping`.          |
 | `LOG_LEVEL`      | `INFO`    | `DEBUG` shows much more detail when troubleshooting.         |
+| `TELEGRAM_TEST_SERVERS` | `false` | `true` = log in to Telegram's test servers with a test account. See [D. Telegram test servers](#d-telegram-test-servers-no-real-account). |
 | `AUTO_REPLY_ENABLED`  | `true`        | `false` turns all auto-replies off (AI and fixed text).    |
 | `AUTO_REPLY_TEXT`     | `brate radim` | Fixed reply used when the AI is off, not allowed for the chat, or fails. |
 | `AUTO_REPLY_DELAY`    | `3`           | Seconds to wait for the person to stop sending messages before replying once. `0` = reply to each message immediately. |
-| `AUTO_REPLY_COOLDOWN` | `0`           | Minimum seconds between auto-replies in the same chat. `0` = no limit. |
+| `AUTO_REPLY_COOLDOWN` | `0`           | Minimum seconds between auto-replies in the same chat. Messages that arrive during the cooldown get no reply at all. `0` = no limit. |
 | `AUTO_REPLY_QUOTE`    | `false`       | `true` = quote their message above each reply. `false` = send a plain message, which looks more like a normal chat. |
 | `LLM_ENABLED`         | `true`        | `false` = always use the fixed `AUTO_REPLY_TEXT`.         |
 | `LLM_MODEL`           | `qwen3.5:9b`  | Any model you've pulled in Ollama (`ollama list`), e.g. `qwen3.5:4b`, `gemma4:12b`. |
@@ -161,12 +164,12 @@ All other settings are optional:
 | `LLM_TIMEOUT`         | `60`          | Seconds to wait for the AI before sending the fixed text instead. |
 | `LLM_ALLOWED_CHATS`   | *(empty)*     | Comma-separated chat IDs that get AI replies. Empty = everyone. Others get the fixed text. Find IDs with `.id`. |
 | `LLM_REPLY_LANGUAGE`  | *(empty)*     | Force every AI reply into one language, e.g. `English`. Empty = whatever the prompt says. See [Reply language](#reply-language). |
-| `AUTO_REPLY_DELAY_ENABLED` | `true`   | `false` = ignore the two delay settings and reply within ~2 seconds (still one reply to a burst of messages). Handy while testing. |
+| `AUTO_REPLY_DELAY_ENABLED` | `true`   | `false` = ignore the two delay settings and reply after ~2 seconds (still one reply to a burst of messages). Handy while testing. |
 | `AUTO_REPLY_DELAY_MAX` | `0`          | If larger than `AUTO_REPLY_DELAY`, each reply waits a random time between the two (e.g. `180`–`600` = 3 to 10 minutes). `0` = always `AUTO_REPLY_DELAY`. |
 | `LLM_TYPO_RATE`       | `0`           | Share of words (0–1) that get a small typo in AI replies, e.g. `0.03`. `0` = no typos. |
 | `LLM_VISION`          | `true`        | Show the AI the photos people send (needs a model that can see images, like `qwen3.5`). |
 | `LLM_MAX_IMAGES`      | `3`           | How many of the most recent photos in the chat the AI sees. |
-| `HANDOFF_NOTIFY_CHAT` | *(empty)*     | Who gets the alert when the AI hands a chat over to you: an `@username` (best), or the phone/ID of a contact. Empty = your Saved Messages. See [Handoff to you](#handoff-to-you). |
+| `HANDOFF_NOTIFY_CHAT` | *(empty)*     | Who gets the alert when the AI hands a chat over to you: an `@username` (best; a `t.me/…` link or a name without `@` works too), a `+phone` number of a contact, or a numeric user ID. Empty = your Saved Messages. The setup asks for it. See [Handoff to you](#handoff-to-you). |
 | `HANDOFF_CLIENT_MESSAGE` | *(empty)*  | Sent to the person when the AI hands the chat over. Empty = send nothing. |
 
 `.env.example` (the template for new settings files) sets the delay to 3–10 minutes, typos to
@@ -209,7 +212,8 @@ How a reply is produced (`userbot/autoreply.py` + `userbot/llm.py`):
 Someone DMs you
    └─ chat paused (handed over to you)? → do nothing
    └─ wait AUTO_REPLY_DELAY..AUTO_REPLY_DELAY_MAX seconds (restarts if they send another message)
-        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat (+ the newest LLM_MAX_IMAGES photos)
+        └─ you already replied yourself in the meantime? → do nothing
+        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat (with up to LLM_MAX_IMAGES of their newest photos)
              └─ show "typing…" while the local model writes a reply   (Ollama, on your machine)
                   ├─ reply contains [[HANDOFF]] → pause the chat, send HANDOFF_CLIENT_MESSAGE, alert you
                   └─ remove markdown, add typos (LLM_TYPO_RATE), send the reply
@@ -222,7 +226,9 @@ Someone DMs you
   sends you login codes.
 - **Your own messages are never answered.** They are passed to the AI as context, though,
   so it knows what "you" already said. That includes messages you type yourself, so you can
-  jump into a conversation at any time and the bot picks up from there.
+  jump into a conversation at any time and the bot picks up from there. If you reply while the
+  bot is still waiting to answer, it doesn't send its own reply to that message. To keep the
+  AI out of a chat for good, use `.pause`.
 - **Bursts get one reply.** "hej" / "jesi tu" / "trebam nešto" sent within a few seconds
   gets a single reply to the last one, written with all three in view.
 - **Private.** Messages are processed by Ollama on your computer. Nothing goes to a cloud AI.
@@ -260,7 +266,7 @@ To make the bot continue in that chat later:
 
 | From | How |
 |---|---|
-| The `HANDOFF_NOTIFY_CHAT` account | Reply `resume` to the alert, or send `resume <chat id>`. Also `pause <chat id>`, `paused` (list), `help`. |
+| The `HANDOFF_NOTIFY_CHAT` account | Reply `resume` to the alert, or send `resume <chat id>`. Also `pause <chat id>` (or `pause` as a reply to an alert), `paused` (list), `help`. |
 | Your own account | `.resume` as a reply to an alert in Saved Messages, `.resume <chat id>` anywhere, or `.resume` in the client's chat. |
 
 The notify account must be a **different** account (e.g. your second account or a
@@ -305,9 +311,10 @@ lines. See [What the prompt does vs. what the code does](#what-the-prompt-does-v
 - You can write your own prompt file (e.g. `prompts/work.txt`, or *Prompts → Create a new
   prompt* in the menu) and switch with `python -m userbot prompt use work`. Keep a `<handoff>`
   section with the `[[HANDOFF]]` rule if you want handoffs in it too.
-- **Data folders keep their copy of the prompt.** When `chat.txt` changes in the repository,
-  existing data folders (testers') keep the old one until *Prompts → Restore the original
-  prompts* in the menu.
+- **Testers get a changed prompt with the next version.** Their data folder has its own copy of
+  `chat.txt`. When you ship a new version with a changed `chat.txt`, it replaces theirs on the
+  first start (an edited copy is saved in `prompts/backup/`; see [Updating testers](#updating-testers)).
+  Within the same version, *Prompts → Restore the original prompts* gets the shipped one back.
 
 ### Reply language
 
@@ -358,8 +365,9 @@ what you've downloaded; `ollama rm <model>` deletes one.
 ### A. Automated tests (no Telegram account or Ollama needed)
 
 They check config parsing, commands, the auto-reply logic (history, photos, random delay,
-bursts, fallback, allowlist), typos, the handoff (pausing, alerts, resume commands) and the LLM
-client, all with fakes. Nothing connects to Telegram or Ollama.
+bursts, fallback, allowlist), typos, the handoff (pausing, alerts, resume commands), version
+updates (settings and prompts of a 0.1.0 data folder), the test-server login, `doctor` and the
+LLM client, all with fakes. Nothing connects to Telegram or Ollama.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -369,8 +377,9 @@ python -m pytest
 ### B. Chat with the AI in your terminal (no Telegram)
 
 With Ollama running, you play the person messaging you (the client), and the bot answers
-with exactly the same prompt, model and settings as the real userbot. This is the best way to
-tune your prompt:
+with the same prompt, model and AI settings as the real userbot (typos, photos, handoff, reply
+language). It always uses the AI: `LLM_ENABLED`, `AUTO_REPLY_ENABLED` and `LLM_ALLOWED_CHATS`
+don't apply, and each message gets its own reply. This is the best way to tune your prompt:
 
 ```bash
 python -m userbot chat --name Aleksa
@@ -400,7 +409,7 @@ next message already uses the new version.
 3. **AI reply:** for testing, set `AUTO_REPLY_DELAY_ENABLED=false` so you don't wait
    3–10 minutes per reply (`python -m userbot settings set AUTO_REPLY_DELAY_ENABLED false`, or
    *Settings* in the menu). Ask a friend (or use a second account) to send you a
-   private message. After ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
+   private message. After ~2 seconds they should see you "typing…", then an AI reply. The terminal logs
    `Auto-replied in chat ...` (the reply text only with `LOG_LEVEL=DEBUG`). Have them send
    2–3 messages quickly. They should get **one** reply.
 4. **Handoff:** set `HANDOFF_NOTIFY_CHAT=@your_other_account` and restart. From a test
@@ -417,6 +426,51 @@ next message already uses the new version.
 
 If nothing happens, check that the terminal says `Logged in as ...`, that you used the right
 prefix, and that the command is the **whole** message (`.ping`, not `hey .ping`).
+
+### D. Telegram test servers (no real account)
+
+Telegram runs separate **test servers**: a parallel Telegram with its own accounts, where
+anyone can log in to a test number with a fixed code
+([Telegram's docs](https://core.telegram.org/api/auth#test-accounts)). The bot can run there,
+so you can try the whole thing (replies, handoff alerts, `resume`, commands) without your
+real account or real clients.
+
+- **Test numbers** look like `99966` + `2` + any 4 digits, e.g. `9996621234`. The `2` is
+  the test data center the bot uses.
+- **The login code** is always `22222`.
+- **Accounts must be created in the official Telegram app.** Telegram doesn't let
+  third-party programs (like this one) sign up new accounts, on the test servers too. The
+  bot can only log in to a test account that already exists.
+- **Everything there is public and temporary.** Anyone can log in to any test number, and
+  Telegram wipes the test servers now and then. Don't put anything real there.
+
+**One-time setup: create the test accounts.** You need two or three: one for the bot,
+one to play the client, and optionally one for the alerts. In the official app:
+
+- **iPhone:** tap *Settings* 10 times quickly → *Accounts* → *Login to another account* →
+  *Test*. Sign up with a test number (e.g. `9996621234`, code `22222`).
+- **Telegram Desktop (Windows/Linux):** hold **Shift+Alt** and right-click *Add Account* →
+  *Test Server*. **macOS app:** tap the Settings icon 10 times, then **⌘-click** *Add Account*.
+  Telegram's guides say new test accounts can only be created on mobile, so you may need
+  the phone for the sign-up and can then log in on desktop.
+- **Telegram Web:** <https://web.telegram.org/?test=1>.
+
+**Run the bot on the test servers:**
+
+```bash
+python -m userbot settings set TELEGRAM_TEST_SERVERS true
+```
+
+Then start the bot. It asks for a phone number: give the bot's test number, code `22222`.
+This test login is stored separately (`sessions/userbot-test.session`), so your real
+login stays as it is. The menu, the startup log and `doctor` say **TEST servers** while it's
+on. From the "client" test account, message the bot's test account and play the script. Set
+`HANDOFF_NOTIFY_CHAT` to the third test account's username (test accounts can set one too),
+or leave it empty to get alerts in the bot account's Saved Messages.
+
+Back to your real account: `python -m userbot settings set TELEGRAM_TEST_SERVERS false`.
+*Log out of Telegram* only ends the login of the mode you're in: with test servers on, it logs
+out the test account and your real login stays.
 
 ---
 
@@ -442,9 +496,11 @@ Settings, prompts, the login and logs live in one **data folder** (see `userbot/
   - macOS: `~/Library/Application Support/TelegramUserbot`
   - Linux: `~/.local/share/TelegramUserbot`
 
-  It holds `settings.env` (made from `.env.example`), `prompts/`, `sessions/`, `logs/` and,
-  once a chat has been handed over to you, `paused_chats.json`. The default prompts are copied
-  in on first run and never overwritten.
+  It holds `settings.env` (made from `.env.example`), `prompts/`, `sessions/`, `logs/`,
+  `version.json` (which version last ran, see [Updating testers](#updating-testers)) and, once a
+  chat has been handed over to you, `paused_chats.json`. The default prompts are copied in on
+  first run, and replaced only by *Restore the original prompts* or a version update (which
+  keeps a backup).
 - **`--home DIR` or `USERBOT_HOME=DIR`** picks any other folder, e.g. to test a fresh setup
   without touching your own.
 
@@ -473,11 +529,42 @@ Things to know:
   and refuses to include `.env`, `sessions/` or `*.session`.
 - **The default prompts testers get are the repository's `prompts/` files.**
 - **Before sending a new version,** bump the version in `userbot/__init__.py` and
-  `pyproject.toml`; the script checks that they match.
+  `pyproject.toml` (the script checks that they match), and add what changed to
+  [CHANGELOG.md](CHANGELOG.md).
 - **The first build downloads the pinned uv binaries** (checked against their SHA-256) into
   `dist/.cache/`. It also refreshes `uv.lock` when `pyproject.toml` changed; commit that.
 - **Building on GitHub,** single-file executables and code signing are planned separately in
   [docs/plan-github-builds.md](docs/plan-github-builds.md).
+
+### Updating testers
+
+Testers unzip the new version into a new folder and start it as before. Their settings,
+prompts and Telegram login live in the data folder, so nothing has to be set up again, and
+Ollama and the model are not downloaded again. (Python and the libraries, about 30 MB, are
+downloaded once more into the new folder.)
+
+On the first start of a newer version, the bot (`userbot/updates.py`):
+
+1. **Updates the settings file.** Settings that are new in `.env.example` are added with their
+   explanation. A setting the tester never changed gets the new default (e.g. the old 3 s
+   delay becomes 180 s). Values they changed themselves are kept. The old file is saved as
+   `settings.env.before-<new version>` (`.env.before-<new version>` when running from the
+   repository).
+2. **Updates the prompts** that changed in this version. If the tester had edited theirs, their
+   copy is saved as `prompts/backup/<name>-<old version>.txt` first. (Coming from 0.1.0 there's
+   no record of the shipped prompt, so any copy that differs from the new one is saved.) A
+   prompt that didn't change in this version is left alone, edited or not.
+3. **Shows a one-time notice:** "Updated to X (from Y)", the new entries of `CHANGELOG.md`,
+   every setting that was added or changed, and which prompts were replaced and where the old
+   copies are. It also reminds them to set `HANDOFF_NOTIFY_CHAT` if it was just added empty,
+   and warns if their active prompt is no longer included (e.g. `busy.txt`).
+
+`version.json` in the data folder records the version, the template's defaults and a
+fingerprint of each shipped prompt, so the next update knows what the tester changed. Data
+folders from 0.1.0 don't have it; for those the bot uses the 0.1.0 defaults built into
+`updates.py`. Running from the repository works the same way on your `.env` (writing
+`version.json` and `.env.before-<version>` to the repository folder, both gitignored), except
+that the prompts are never touched there.
 
 ---
 
@@ -489,7 +576,8 @@ telegram-bot/
 │   ├── __main__.py      # Entry point: python -m userbot
 │   ├── cli.py           # Commands (Typer); no command = the menu
 │   ├── menu.py          # Interactive menu
-│   ├── setup_wizard.py  # First-run setup: API ID/hash, Ollama + model, prompt, login
+│   ├── setup_wizard.py  # First-run setup: API ID/hash, Ollama + model, prompt, alert account, login
+│   ├── updates.py       # Brings settings and prompts up to date after a new version
 │   ├── actions.py       # What the menu and the commands do (shared)
 │   ├── bot.py           # Runs the userbot; Telegram login/logout
 │   ├── paths.py         # The data folder (settings, prompts, sessions, logs)
@@ -519,6 +607,8 @@ telegram-bot/
 ├── tests/               # pytest tests (offline)
 ├── sessions/            # Created on first run. Holds your login. KEEP PRIVATE
 ├── .env.example         # Template for your .env / the data folder's settings.env
+├── CHANGELOG.md         # What changed per version (shown to testers after an update)
+├── CLAUDE.md            # Working notes for Claude Code (keep docs in sync, release steps)
 ├── pyproject.toml       # Dependencies (uv); uv.lock pins the bundle's versions
 ├── requirements.txt     # Same dependencies for pip
 └── requirements-dev.txt
@@ -545,7 +635,7 @@ telegram-bot/
 2. Register the module in `userbot/handlers/__init__.py`:
 
    ```python
-   from . import basic, fun  # noqa: F401
+   from . import basic, fun, handoff  # noqa: F401
    ```
 
 3. Restart the userbot and send `.shout hello`.
@@ -601,13 +691,17 @@ like an Apple Silicon Mac, or use a smaller model there. Copy the `sessions/` fi
 | `No reply from ... within 60s` | The Mac is short on memory or busy. Close apps, use `qwen3.5:4b`, or raise `LLM_TIMEOUT`. |
 | AI answers in the wrong language | Set `LLM_REPLY_LANGUAGE` in `.env` (e.g. `English`) and restart. See [Reply language](#reply-language). |
 | AI makes up prices or promises | Make sure the answer is in the `<facts>` section of `prompts/chat.txt`. It's told to use only those. |
-| Prompt changes in the repository don't show up for a tester | Their data folder keeps its own copy. Menu → *Prompts* → *Restore the original prompts*. |
+| Prompt changes in the repository don't show up for a tester | Testers get them with the next **version**: bump the version and add a `CHANGELOG.md` entry, then build. Without a version bump, the update doesn't run; they can use *Prompts → Restore the original prompts*. |
+| A tester lost their prompt edits after an update | Their old copy is in `prompts/backup/` in the data folder (`<name>-<old version>.txt`). |
+| A setting changed after an update | Only settings the tester never changed get new defaults. The previous file is `settings.env.before-<version>` next to `settings.env`. |
+| Login fails with "can't create" / sign-up on test servers | The test number has no account yet. Create it once in the official app's test mode (see [D. Telegram test servers](#d-telegram-test-servers-no-real-account)), then log in. |
+| Test-server login says the code is wrong | It's always `22222`. Telegram changed code lengths before; if it's rejected, try `222222`. |
 | No handoff alert arrives | Check the startup log for `Handoff alerts go to ...`. If `HANDOFF_NOTIFY_CHAT` wasn't found, alerts go to your Saved Messages. Use an `@username`. Test the trigger in the playground. |
 | The bot doesn't reply in one chat | It may be paused (handed over to you). Send `.paused` in Saved Messages to check, `.resume <chat id>` to continue. |
-| Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes by default). Set `AUTO_REPLY_DELAY_ENABLED=false` while testing. |
+| Replies take minutes | That's `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` (3–10 minutes in the settings file you start with). Set `AUTO_REPLY_DELAY_ENABLED=false` while testing. |
 | AI talks about a photo it can't see | The model can't read images (the log says so at startup). Use `qwen3.5`, or set `LLM_VISION=false`. |
 | AI replies sound off | Edit the prompt (tone, how you write, example phrases), test in the playground, or try another model. |
-| Not sure what's wrong | `python -m userbot doctor` checks settings, the prompt (and its handoff rule), the reply delay, where alerts go, Ollama, the model, memory and the login. |
+| Not sure what's wrong | `python -m userbot doctor` checks settings, test servers, the prompt (and its handoff rule), the reply delay, where alerts go, Ollama, the model, memory and the login. |
 
 ## Useful links
 

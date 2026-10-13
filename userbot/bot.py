@@ -17,19 +17,66 @@ from .llm import LLM
 
 log = logging.getLogger("userbot")
 
+# Telegram's test servers (https://core.telegram.org/api/auth#test-accounts):
+# test accounts have numbers 99966XYYYY, where X is the data center, and the
+# login code is always X five times. We use data center 2. Port 80 per
+# Telethon's docs (443 doesn't always work).
+TEST_DC, TEST_DC_IP, TEST_DC_PORT = 2, "149.154.167.40", 80
+TEST_PHONE_PREFIX = f"99966{TEST_DC}"
+TEST_LOGIN_CODE = str(TEST_DC) * 5
+
 
 def make_client(config: Config) -> TelegramClient:
     if not config.has_telegram_credentials:
         raise ConfigError("API_ID / API_HASH are not set. Run the setup first.")
     config.sessions_dir.mkdir(parents=True, exist_ok=True)
+    new_session = not session_file(config).exists()
     # device_model / app_version are what Telegram shows under Settings -> Devices.
-    return TelegramClient(
+    client = TelegramClient(
         str(config.session_path),
         config.api_id,
         config.api_hash,
         device_model="Telegram Userbot",
         app_version=__version__,
     )
+    if config.telegram_test_servers and new_session:
+        # Only for a new login file: an existing one already points at the test server.
+        client.session.set_dc(TEST_DC, TEST_DC_IP, TEST_DC_PORT)
+    return client
+
+
+def _start_kwargs(config: Config, ask_phone, ask_code, ask_password) -> dict:
+    """The phone / code / password callbacks for client.start(), with hints on test servers."""
+    phone = config.phone
+    if config.telegram_test_servers:
+        if phone and not phone.lstrip("+").startswith("99966"):
+            phone = None  # PHONE is the real number; the test account has its own
+        ask_real_phone, ask_real_code = ask_phone, ask_code
+
+        def ask_test_phone() -> str:
+            log.info(
+                "Telegram TEST servers: use a test account's number, %sXXXX (e.g. %s1234). "
+                "The account must already exist: create it once in the Telegram app's test mode.",
+                TEST_PHONE_PREFIX,
+                TEST_PHONE_PREFIX,
+            )
+            return ask_real_phone()
+
+        def ask_test_code() -> str:
+            # Telegram has changed code lengths before; Telethon's docs suggest the 6-digit form then.
+            log.info(
+                "Telegram TEST servers: the login code is %s (if that's rejected, %s).",
+                TEST_LOGIN_CODE,
+                TEST_LOGIN_CODE + TEST_LOGIN_CODE[0],
+            )
+            return ask_real_code()
+
+        ask_phone, ask_code = ask_test_phone, ask_test_code
+    return {
+        "phone": (lambda: phone) if phone else ask_phone,
+        "code_callback": ask_code,
+        "password": ask_password,
+    }
 
 
 def session_file(config: Config) -> Path:
@@ -44,11 +91,7 @@ async def login(config: Config, ask_phone, ask_code, ask_password) -> User:
     """Log in (interactive the first time) and return the account. The login is saved in sessions/."""
     client = make_client(config)
     try:
-        await client.start(
-            phone=(lambda: config.phone) if config.phone else ask_phone,
-            code_callback=ask_code,
-            password=ask_password,
-        )
+        await client.start(**_start_kwargs(config, ask_phone, ask_code, ask_password))
         return await client.get_me()
     finally:
         await client.disconnect()
@@ -91,12 +134,10 @@ async def run_bot(config: Config, ask_phone, ask_code, ask_password) -> None:
     replier = register_auto_reply(client, config, llm)
 
     try:
-        await client.start(
-            phone=(lambda: config.phone) if config.phone else ask_phone,
-            code_callback=ask_code,
-            password=ask_password,
-        )
+        await client.start(**_start_kwargs(config, ask_phone, ask_code, ask_password))
         me = await client.get_me()
+        if config.telegram_test_servers:
+            log.warning("Connected to Telegram's TEST servers (TELEGRAM_TEST_SERVERS=true), as a test account.")
         log.info(
             "Logged in as %s (@%s, id=%s). Send %shelp in Saved Messages to try it. Ctrl+C to stop.",
             me.first_name,

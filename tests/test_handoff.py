@@ -136,6 +136,14 @@ def test_remote_resume_and_pause_by_id(tmp_path):
     assert "wasn't paused" in run_remote_command("resume 7", paused, None)
 
 
+def test_remote_pause_as_reply_to_an_alert(tmp_path):
+    paused = PausedChats(tmp_path / "p.json")
+
+    run_remote_command("pause", paused, replied_text=format_notification("P", 555, "r", []))
+
+    assert paused.is_paused(555)
+
+
 def test_remote_resume_without_target_explains_usage(tmp_path):
     assert "resume <chat id>" in run_remote_command("resume", PausedChats(tmp_path / "p.json"), None)
 

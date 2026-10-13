@@ -38,7 +38,8 @@ async def _answer(event: events.NewMessage.Event, text: str, in_their_chat: bool
 async def pause(event: events.NewMessage.Event, ctx: Context) -> None:
     chat_id, here = await _target_chat(event, event.pattern_match.group(1))
     if chat_id is None:
-        await event.edit("Use .pause in the chat, or .pause <chat id>.")
+        p = ctx.config.command_prefix
+        await event.edit(f"Use {p}pause in the chat, or {p}pause <chat id>.")
         return
     PausedChats(ctx.config.paused_chats_file).pause(chat_id, reason="paused by you")
     await _answer(event, f"Paused: the AI no longer answers chat {chat_id}.", here)
@@ -48,7 +49,8 @@ async def pause(event: events.NewMessage.Event, ctx: Context) -> None:
 async def resume(event: events.NewMessage.Event, ctx: Context) -> None:
     chat_id, here = await _target_chat(event, event.pattern_match.group(1))
     if chat_id is None:
-        await event.edit("Use .resume in the chat, .resume <chat id>, or reply .resume to a handoff alert.")
+        p = ctx.config.command_prefix
+        await event.edit(f"Use {p}resume in the chat, {p}resume <chat id>, or reply {p}resume to a handoff alert.")
         return
     if PausedChats(ctx.config.paused_chats_file).resume(chat_id):
         await _answer(event, f"Resumed: the AI answers chat {chat_id} again.", here)

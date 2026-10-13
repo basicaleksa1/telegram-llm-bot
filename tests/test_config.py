@@ -1,6 +1,6 @@
 import pytest
 
-from userbot.config import ConfigError, load_config, read_settings, write_setting
+from userbot.config import ConfigError, load_config, parse_notify_target, read_settings, write_setting
 from userbot.paths import Home, set_home
 
 
@@ -230,3 +230,34 @@ def test_invalid_setting_is_rejected_and_the_old_value_kept(home):
 
     assert read_settings()["AUTO_REPLY_DELAY"] == "3"
     assert "LLM_TIMEOUT" not in home.settings_file.read_text()
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("", ""),
+        ("@my_alt_account", "@my_alt_account"),
+        ("my_alt_account", "@my_alt_account"),
+        ("https://t.me/my_alt_account", "@my_alt_account"),
+        ("t.me/my_alt_account", "@my_alt_account"),
+        ("+381 60 1234567", "+381601234567"),
+        ("123456789", "123456789"),
+    ],
+)
+def test_notify_target_is_normalised(value, expected):
+    assert parse_notify_target(value) == expected
+
+
+@pytest.mark.parametrize("value", ["@ab", "my alt", "@1abc", "hello!"])
+def test_invalid_notify_target_raises(value):
+    with pytest.raises(ConfigError, match="HANDOFF_NOTIFY_CHAT"):
+        parse_notify_target(value)
+
+
+def test_test_servers_use_their_own_login_file(home):
+    real = load_config({"API_ID": "1", "API_HASH": "abc"})
+    test = load_config({"API_ID": "1", "API_HASH": "abc", "TELEGRAM_TEST_SERVERS": "true"})
+
+    assert real.telegram_test_servers is False
+    assert test.session_path == home.sessions_dir / "userbot-test"
+    assert real.session_path != test.session_path

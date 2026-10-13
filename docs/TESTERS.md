@@ -111,7 +111,7 @@ A text window opens and shows *"First start: downloading Python and the bot's li
 
 ## Step 4: The setup
 
-The setup has 4 steps; the screen shows *Step 1 of 4*, *Step 2 of 4*… and they match 4.1–4.4 below. Use the **arrow keys** and **Enter** to choose, and **y/n** for yes/no questions. You can stop at any point with **Ctrl+C**. The setup can be run again later from the menu (**Run setup again**).
+The setup has 5 steps; the screen shows *Step 1 of 5*, *Step 2 of 5*… and they match 4.1–4.5 below. Use the **arrow keys** and **Enter** to choose, and **y/n** for yes/no questions. You can stop at any point with **Ctrl+C**. The setup can be run again later from the menu (**Run setup again**).
 
 ### 4.1 Telegram API ID and hash
 Paste the **App api_id** and **App api_hash** from step 1:
@@ -153,12 +153,14 @@ The **prompt** is a plain text file with instructions for the AI. It's sent to t
 
 `{name}` in the prompt is replaced with your Telegram first name. You can edit the prompt at any time (see [Editing the prompt](#editing-the-prompt)).
 
-> ✏️ **Before you start the bot, read the prompt** (answer *y* to "Open it in an editor now?").
+> ✏️ **Before you start the bot, read the prompt** (answer *y* to "Open it in an editor now to read or change it?").
 > - The `<facts>` section (prices, what you need from the client) is what the AI tells people. Check that it's right.
 > - Out of the box, **replies are always in English**. That's both the prompt and the setting `LLM_REPLY_LANGUAGE=English`; see [Settings worth knowing](#settings-worth-knowing) to change it.
-> - To get the handoff alerts on another Telegram account, set `HANDOFF_NOTIFY_CHAT` (see [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you)).
 
-### 4.4 Telegram login (online, once)
+### 4.4 Handoff alerts
+When the AI reaches the point where you should take over, it stops replying to that person and sends you an **alert**. Enter the **@username of a different Telegram account** you have, for example your second account, so the alert pops up as a normal notification (find it in Telegram → Settings → Username). Leave it empty to get the alerts in your own **Saved Messages** instead. See [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you).
+
+### 4.5 Telegram login (online, once)
 1. Enter **your phone number** in international format (`+381…`).
 2. Telegram sends a **login code to your Telegram app**, as a message from "Telegram". Type it in.
 3. If your account has **two-step verification**, enter that password. It isn't shown while you type.
@@ -202,6 +204,18 @@ After the setup you see the **menu**. Next time you double-click the launcher, i
 
 ---
 
+## Updating to a new version
+
+When the developer sends you a newer zip:
+
+1. Unzip it into a **new folder** (or delete the old `TelegramUserbot` folder first) and start it the same way as before (step 3). You may need to allow it once more in the security warning.
+2. The first start downloads Python and the libraries again (about 30 MB). **Ollama and the AI model are not downloaded again**, and you **don't** need to log in or run the setup again: your settings and login are kept.
+3. A box **"Updated to …"** appears once. It lists what's new, which of your **settings** were added or changed, and whether your **prompt** was replaced with the new version. It may also remind you to set the alert account (`HANDOFF_NOTIFY_CHAT`).
+   - Settings you had changed yourself are kept. Your previous settings file is saved next to the new one (`settings.env.before-…`).
+   - If you had edited the prompt, your version is saved in `prompts/backup/` before the new one replaces it.
+
+---
+
 ## When the AI hands a chat to you
 
 When the client reaches the key point of the script (no Reddit accounts and no supplier), or asks whether they're talking to a bot, the AI stops:
@@ -214,7 +228,7 @@ When the client reaches the key point of the script (no Reddit accounts and no s
 - From the alert account: **reply `resume` to the alert**. That account can also send `paused` to list the paused chats.
 - From your own account: reply `.resume` to the alert in Saved Messages.
 
-**Setting it up:** in Settings, set `HANDOFF_NOTIFY_CHAT` to your **other** Telegram account's username, for example `@my_second_account`, and restart the bot. The start-up text says where alerts go (*Handoff alerts go to …*).
+**Setting it up:** the setup asks for it (step 4.4). To change it later, set `HANDOFF_NOTIFY_CHAT` in Settings to your **other** Telegram account's username, for example `@my_second_account`, and restart the bot. The start-up text says where alerts go (*Handoff alerts go to …*).
 
 You can also stop the AI in a chat yourself: send `.pause` in that chat (the message disappears right away), and `.resume` to turn it back on.
 
@@ -229,7 +243,9 @@ You can also stop the AI in a chat yourself: send `.pause` in that chat (the mes
 Other options in **Prompts**:
 - **Switch to another prompt** (if you created one). Restart the bot afterwards if it's running.
 - **Create a new prompt:** a copy of the current one under a new name, so you can experiment without losing the original.
-- **Restore the original prompts** if an edit went wrong, or to get the newest version after an update. **A new version of the bot doesn't replace your prompt by itself.**
+- **Restore the original prompts** if an edit went wrong.
+
+**When you install a new version** that comes with a changed prompt, it replaces yours automatically on the first start. If you had edited it, your version is kept in `prompts/backup/` (see [Updating to a new version](#updating-to-a-new-version)). Copy anything you want to keep back into the new prompt.
 
 Tips:
 - **Keep the `[[HANDOFF]]` rule** in the `<handoff>` section, or the AI never hands chats over to you.
@@ -247,11 +263,12 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | `LLM_ALLOWED_CHATS` | **Only these chats get AI replies.** Everyone else gets the fixed text. Good for testing with one friend first. To find a chat's ID, start the bot and send `.id` in that chat: your message turns into "Chat ID: …" (the other person sees it too; delete it afterwards). |
 | `AUTO_REPLY_TEXT` | The fixed text sent when the AI is off, not allowed for that chat, or fails. Default: `brate radim`. |
 | `AUTO_REPLY_DELAY_ENABLED` | `false` = reply within a couple of seconds instead of waiting. **Use this while testing**, and set it back to `true` afterwards. |
-| `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` | Each reply waits a random time between these two (in seconds). **Default for new installs: 180 and 600, so 3–10 minutes.** |
+| `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` | Each reply waits a random time between these two (in seconds). **They start at 180 and 600, so 3–10 minutes.** Leaving a value empty uses the built-in fallback (3 and 0), not these. |
 | `HANDOFF_NOTIFY_CHAT` | Which account gets the handoff alerts, e.g. `@my_second_account`. Empty = your Saved Messages. |
 | `HANDOFF_CLIENT_MESSAGE` | What the client gets when the AI hands the chat to you. Empty = nothing. |
-| `LLM_TYPO_RATE` | How many words get a small typo (0–1). **Default: `0.03`.** `0` = no typos. |
-| `LLM_REPLY_LANGUAGE` | Forces replies into one language. **Default: `English`.** Empty = whatever the prompt says (the prompt also says English: remove that line from its `<style>` section too). |
+| `TELEGRAM_TEST_SERVERS` | `true` = log in to Telegram's **test servers** with a test account instead of your real one. Only if the developer asks you to; the steps are in `README.md` inside the bot's `app` folder (section *Telegram test servers*). |
+| `LLM_TYPO_RATE` | How many words get a small typo (0–1). **Starts at `0.03`.** `0` = no typos. |
+| `LLM_REPLY_LANGUAGE` | Forces replies into one language. **Starts as `English`.** Empty = whatever the prompt says (the prompt also says English: remove that line from its `<style>` section too). |
 | `AUTO_REPLY_ENABLED` | `false` turns off all automatic replies. |
 
 ---
@@ -280,7 +297,7 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | macOS: "can't be opened" | See step 3, macOS: **System Settings → Privacy & Security → Open Anyway**. |
 | my.telegram.org says "ERROR" | See step 1: VPN/ad blocker off, other browser, other short name. |
 | Login code doesn't arrive | Look **in the Telegram app** (chat named "Telegram"), not in your SMS. |
-| "API ID / hash rejected" | Copy both values again from my.telegram.org, then **Run setup again**. |
+| "Telegram rejected the API ID / hash" | Copy both values again from my.telegram.org, then **Run setup again**. |
 | "Ollama not running" | Open the Ollama app (llama icon). **Start the bot** and the playground also try to start it. If it's not installed, **Run setup again**. |
 | The model download is slow or stops | Run it again (menu → **AI model**); it continues where it stopped. |
 | Replies take a long time (30 s+) | The model is too big for your computer. Menu → **AI model**, and pick a smaller one. |
@@ -289,6 +306,8 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | The bot stopped replying in one chat | The AI probably handed it to you. Check for an alert, then reply `resume` to it (see [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you)). |
 | No handoff alert on my other account | Set `HANDOFF_NOTIFY_CHAT` to that account's `@username` and restart. Until it's found, alerts go to your Saved Messages. |
 | "FloodWait" message | Telegram is rate-limiting. Wait the number of seconds shown. |
+| My prompt edits are gone after an update | The new version replaced the prompt. Your edited copy is in the data folder under `prompts/backup/` (menu → **Open data folder**). |
+| A setting changed after an update | Only settings you had never changed got new values. Your previous settings file is next to the new one: `settings.env.before-…`. Change anything back in **Settings**. |
 
 ---
 

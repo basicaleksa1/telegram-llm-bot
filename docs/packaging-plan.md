@@ -44,11 +44,12 @@ The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on
 ## What the tester experiences
 
 1. Unzip, then double-click the launcher. Get past the OS security warning once.
-2. **First start:** the launcher downloads Python and the libraries automatically, then offers the **setup wizard** (4 steps):
+2. **First start:** the launcher downloads Python and the libraries automatically, then offers the **setup wizard** (5 steps):
    1. **Telegram API ID and hash.** It explains where to get them, offers to open my.telegram.org, and checks the format.
    2. **The local AI.** It detects Ollama and starts it if it isn't running. If it's missing, it installs it after asking (Windows/macOS) or shows the one command to run (Linux). Then it detects RAM and GPU, recommends a model, and downloads it with a progress bar.
    3. **Prompt.** Choose which prompt file to use, with an option to open it in an editor right away.
-   4. **Telegram login.** Phone, the code from the Telegram app, and the 2FA password if set.
+   4. **Handoff alerts.** Which Telegram account gets the alert when the AI hands a chat over (added in 0.2.0).
+   5. **Telegram login.** Phone, the code from the Telegram app, and the 2FA password if set.
 3. **After setup, a menu.** Later starts open it directly:
 
 ```
@@ -90,12 +91,14 @@ The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on
   ```
   TelegramUserbot/
   ├── settings.env        # same KEY=VALUE format as .env (created from .env.example)
-  ├── prompts/            # chat.txt (+ any you add); copied on first run, never overwritten
+  ├── prompts/            # chat.txt (+ any you add); copied on first run, replaced only by "Restore" or a version update
   ├── sessions/           # Telegram login, private
-  └── logs/userbot.log    # rotating, for bug reports. Reply text is only logged at DEBUG level
+  ├── logs/userbot.log    # rotating, for bug reports. Reply text is only logged at DEBUG level
+  ├── version.json        # which version last ran (added in 0.2.0, for updates)
+  └── paused_chats.json   # chats the AI handed over to you (added in 0.2.0)
   ```
 
-- **The data folder survives updates.** A tester unzips a new version, and their settings, prompts and login are still there.
+- **The data folder survives updates.** A tester unzips a new version, and their settings, prompts and login are still there. Since 0.2.0, the first start of a newer version also brings their settings and the shipped prompts up to date and tells them what changed (see the README, *Updating testers*).
 - **The repo's `prompts/` folder stays the source of the default prompts,** so prompts you tune in the repo are what testers get.
 - **Config reloads from the file each time** (no more `os.environ` caching), so changing settings from the menu takes effect on the next start.
 - **Prompt hot-reload:** the prompt file is re-read when it changes. Testers edit and save, and the next reply uses the new version, both in the bot and in the playground.
@@ -160,7 +163,7 @@ The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on
 
 ## What you have to do (online or otherwise) to send a version
 
-1. **Update the version** in `userbot/__init__.py` and `pyproject.toml` (the build script checks they match).
+1. **Update the version** in `userbot/__init__.py` and `pyproject.toml` (the build script checks they match), and add what changed to `CHANGELOG.md`: testers see those lines after updating.
 2. **Build the zips:**
 
    ```bash
