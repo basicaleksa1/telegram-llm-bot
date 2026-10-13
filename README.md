@@ -12,7 +12,7 @@ conversation. You can switch it to a "you're busy, I'll get back to you" style i
 LLM isn't available, it falls back to the fixed text `brate radim`. Groups, channels, bots and Telegram's own service account
 are ignored. See [AI auto-reply](#ai-auto-reply).
 
-**2. Commands.** Three example commands that only react to messages sent *from your account*,
+**2. Commands.** A few commands that only react to messages sent *from your account*,
 so nobody else can trigger them:
 
 | Command      | What it does                                                            |
@@ -20,6 +20,8 @@ so nobody else can trigger them:
 | `.ping`      | Edits your message to `pong (N ms)`. Confirms the userbot is running.   |
 | `.id`        | Shows the current chat's ID. As a reply, also shows the sender/message ID. |
 | `.help`      | Lists all available commands.                                           |
+| `.pause` / `.resume` | Stop / restart the AI in a chat (or `.resume <chat id>`). See [Handoff to you](#handoff-to-you). |
+| `.paused`    | Lists the chats the AI has handed over to you.                          |
 
 It has a menu-driven terminal interface (setup wizard, prompt editing, settings, model
 downloads, diagnostics), and can be sent to testers as a zip that runs on Windows, macOS and
@@ -158,6 +160,15 @@ All other settings are optional:
 | `LLM_TIMEOUT`         | `60`          | Seconds to wait for the AI before sending the fixed text instead. |
 | `LLM_ALLOWED_CHATS`   | *(empty)*     | Comma-separated chat IDs that get AI replies. Empty = everyone. Others get the fixed text. Find IDs with `.id`. |
 | `LLM_REPLY_LANGUAGE`  | *(empty)*     | Force every AI reply into one language, e.g. `English`. Empty = whatever the prompt says. See [Reply language](#reply-language). |
+| `AUTO_REPLY_DELAY_MAX` | `0`          | If larger than `AUTO_REPLY_DELAY`, each reply waits a random time between the two (e.g. `180`–`600` = 3 to 10 minutes). `0` = always `AUTO_REPLY_DELAY`. |
+| `LLM_TYPO_RATE`       | `0`           | Share of words (0–1) that get a small typo in AI replies, e.g. `0.03`. `0` = no typos. |
+| `LLM_VISION`          | `true`        | Show the AI the photos people send (needs a model that can see images, like `qwen3.5`). |
+| `LLM_MAX_IMAGES`      | `3`           | How many of the most recent photos in the chat the AI sees. |
+| `HANDOFF_NOTIFY_CHAT` | *(empty)*     | Who gets the alert when the AI hands a chat over to you: an `@username` (best), or the phone/ID of a contact. Empty = your Saved Messages. See [Handoff to you](#handoff-to-you). |
+| `HANDOFF_CLIENT_MESSAGE` | *(empty)*  | Sent to the person when the AI hands the chat over. Empty = send nothing. |
+
+`.env.example` (the template for new settings files) sets the delay to 3–10 minutes, typos to
+`0.03` and a holding message, as the sales prompt asks.
 
 ### 5. First run / log in
 
@@ -194,10 +205,12 @@ How a reply is produced (`userbot/autoreply.py` + `userbot/llm.py`):
 
 ```
 Someone DMs you
-   └─ wait AUTO_REPLY_DELAY seconds (restarts if they send another message)
-        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat
+   └─ chat paused (handed over to you)? → do nothing
+   └─ wait AUTO_REPLY_DELAY..AUTO_REPLY_DELAY_MAX seconds (restarts if they send another message)
+        └─ fetch the last LLM_HISTORY_LIMIT messages of that chat (+ the newest LLM_MAX_IMAGES photos)
              └─ show "typing…" while the local model writes a reply   (Ollama, on your machine)
-                  └─ send the reply (plain message, or quoting theirs if AUTO_REPLY_QUOTE=true)
+                  ├─ reply contains [[HANDOFF]] → pause the chat, send HANDOFF_CLIENT_MESSAGE, alert you
+                  └─ remove markdown, add typos (LLM_TYPO_RATE), send the reply
                        └─ if anything fails → send AUTO_REPLY_TEXT instead
 ```
 
@@ -214,6 +227,50 @@ Someone DMs you
 - **Speed.** The first reply after a while takes ~15 s, because the model loads into memory.
   After that, 1–3 s. Ollama unloads the model after 5 minutes idle to free the ~8 GB.
 - **One at a time.** If several people write at once, replies are generated one after another.
+
+### What the prompt does vs. what the code does
+
+The model can only write text. Anything about timing, seeing photos or stopping a chat has
+to be done in code. This is how the sales script in `prompts/chat.txt` is split:
+
+| The script asks for | Done by | How |
+|---|---|---|
+| Casual, friendly, not AI-sounding; the conversation steps, niche/Reddit rules, pricing | Prompt | `prompts/chat.txt` |
+| Typos | Code | `LLM_TYPO_RATE` swaps, drops or doubles a letter in a few words. Small models are bad at typos on purpose. |
+| No `#`, no markdown | Both | Prompt rule + the code strips headings, bold, bullets, backticks and em dashes |
+| Reply after 3–10 minutes, randomly | Code | `AUTO_REPLY_DELAY=180`, `AUTO_REPLY_DELAY_MAX=600` |
+| Look at the photos (hair colour, niche) | Both | The code downloads the photos and passes them to the model. The prompt says what to look for. |
+| "Notify me" + "stop chatting" at the key point | Both | The model answers `[[HANDOFF]] summary`. The code does the rest (below). |
+
+### Handoff to you
+
+When the prompt's handoff point is reached (in `chat.txt`: the client has no accounts and no
+supplier, or asks whether they're talking to a bot), the model answers with only
+`[[HANDOFF]] <one-line summary>`. That text never reaches the client. Instead the bot:
+
+1. **pauses the chat**: it won't auto-reply there again, even after a restart (paused chats are
+   kept in `paused_chats.json` in the data folder);
+2. sends the client `HANDOFF_CLIENT_MESSAGE`, if set;
+3. sends you an **alert** with the summary, the last messages and the chat ID, to
+   `HANDOFF_NOTIFY_CHAT` (or your Saved Messages if that's empty or can't be found).
+
+To make the bot continue in that chat later:
+
+| From | How |
+|---|---|
+| The `HANDOFF_NOTIFY_CHAT` account | Reply `resume` to the alert, or send `resume <chat id>`. Also `pause <chat id>`, `paused` (list), `help`. |
+| Your own account | `.resume` as a reply to an alert in Saved Messages, `.resume <chat id>` anywhere, or `.resume` in the client's chat. |
+
+The notify account must be a **different** account (e.g. your second account or a
+colleague). Use its `@username`: a phone number or ID only works if it's in your contacts or
+has messaged you before. The bot never auto-replies to that account. On startup the log shows
+where alerts go (`Handoff alerts go to ...`).
+
+You can also stop the AI in any chat yourself: `.pause` in that chat (the command message is
+deleted right away so they don't see it), or `.pause <chat id>`. `.paused` lists paused chats.
+
+To add more handoff situations (e.g. "the client wants to negotiate the price"), add them to
+the `<handoff>` section of the prompt. The code needs no changes.
 
 ### Conversation vs. busy mode
 
@@ -327,8 +384,17 @@ model and settings as the real userbot. This is the best way to tune your prompt
 python -m userbot chat --name Aleksa
 ```
 
-Type messages and press Enter. `/prompt busy` switches prompts, `/reset` starts a new
-conversation, `/quit` exits. Edit `prompts/chat.txt` and save: the next message already uses
+Type messages and press Enter. `/photo path/to/picture.jpg [caption]` sends a picture (drag
+the file into the terminal to get its path), `/prompt NAME` switches prompts, `/reset` starts
+a new conversation, `/quit` exits.
+
+The playground uses the same typos, delay and handoff logic as the real bot, without
+sending anything: it prints how long the real bot would wait, and at a handoff it shows the
+holding message plus a box with **the exact alert** and where it would go. After that the
+chat stays "paused" (your messages get no reply) until you type `/resume` or `/reset`. To
+test the sales script, play the client: "hi i have 2 models" → `/photo …` → "paid, 3$" →
+"first time" → "how much?" → "what accounts?" → "i dont have accounts" → "i dont have a
+supplier". The last message should trigger the handoff. Also try "are you a bot?". Edit `prompts/chat.txt` and save: the next message already uses
 the new version. Things worth trying: small talk,
 "jesi gledao utakmicu?", "hoćeš u subotu na pivo?", "pozajmi mi 100 evra", "jel ovo bot?".
 
@@ -343,12 +409,17 @@ the new version. Things worth trying: small talk,
    ~3 seconds they should see you "typing…", then an AI reply. The terminal logs
    `Auto-replied in chat ...` (the reply text only with `LOG_LEVEL=DEBUG`). Have them send
    2–3 messages quickly. They should get **one** reply.
-4. **Fallback:** quit Ollama (menu-bar icon → Quit) and have them message again. They should get
+4. **Handoff:** set `HANDOFF_NOTIFY_CHAT=@your_other_account` and restart. From a test
+   account, play the client until the key point ("i dont have a supplier"). The test account
+   gets `HANDOFF_CLIENT_MESSAGE`, your other account gets the alert, and further messages get
+   no reply. Reply `resume` to the alert from the other account and the bot answers again.
+   (Set `AUTO_REPLY_DELAY_MAX=0` and `AUTO_REPLY_DELAY=3` while testing, or you'll wait minutes per reply.)
+5. **Fallback:** quit Ollama (menu-bar icon → Quit) and have them message again. They should get
    `brate radim`, and the terminal shows a warning. Reopen Ollama afterwards.
-5. Make sure commands **ignore other people**: ask the friend to send you `.ping`. They get an
+6. Make sure commands **ignore other people**: ask the friend to send you `.ping`. They get an
    auto-reply, but the command itself does nothing.
-6. Make sure groups are ignored: when someone writes in a group you're in, nothing is sent.
-7. Use `LOG_LEVEL=DEBUG` in `.env` for more detail.
+7. Make sure groups are ignored: when someone writes in a group you're in, nothing is sent.
+8. Use `LOG_LEVEL=DEBUG` in `.env` for more detail.
 
 If nothing happens, check that the terminal says `Logged in as ...`, that you used the right
 prefix, and that the command is the **whole** message (`.ping`, not `hey .ping`).

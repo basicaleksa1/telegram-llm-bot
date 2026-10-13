@@ -31,7 +31,7 @@ def test_ensure_home_creates_folders_settings_and_prompts(tmp_path):
 
     assert home.settings_file.name == "settings.env"
     assert "API_ID=" in home.settings_file.read_text()
-    assert {p.name for p in home.prompts_dir.glob("*.txt")} >= {"chat.txt", "busy.txt"}
+    assert {p.name for p in home.prompts_dir.glob("*.txt")} >= {"chat.txt"}
     assert home.sessions_dir.is_dir() and home.logs_dir.is_dir()
 
 

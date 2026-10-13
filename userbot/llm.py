@@ -8,6 +8,7 @@ import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from ollama import AsyncClient, ResponseError
 
@@ -27,7 +28,8 @@ FALLBACK_SYSTEM_PROMPT = (
 
 _THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
-Message = dict[str, str]
+# {"role": ..., "content": ...}, plus "images": [bytes, ...] for photos.
+Message = dict[str, Any]
 
 
 class LLMError(Exception):
@@ -80,6 +82,8 @@ class LLM:
         self.timeout = config.llm_timeout
         self.prompt = PromptFile(config.llm_system_prompt_file)
         self.reply_language = config.llm_reply_language
+        # Turned off by check() if the model can't see images.
+        self.vision = config.llm_vision
         self._client = client or AsyncClient(host=config.llm_host)
         # A 16 GB machine can only run one generation at a time sensibly.
         self._lock = asyncio.Lock()
@@ -93,6 +97,8 @@ class LLM:
 
     def build_messages(self, owner_name: str, history: Sequence[Message]) -> list[Message]:
         system = self.system_prompt.replace("{name}", owner_name)
+        if not self.vision:
+            history = [{k: v for k, v in m.items() if k != "images"} for m in history]
         messages = [{"role": "system", "content": system}, *history]
         if self.reply_language:
             # Small models copy the language of the chat (including their own
@@ -133,11 +139,15 @@ class LLM:
     async def check(self) -> str | None:
         """Return a problem description, or None if Ollama and the model are ready."""
         try:
-            await self._client.show(self.model)
+            info = await self._client.show(self.model)
         except ResponseError as e:
             if e.status_code == 404:
                 return f"model {self.model!r} is not downloaded. Download it in the menu (AI model), or run: ollama pull {self.model}"
             return f"Ollama error: {e}"
         except (ConnectionError, OSError):
             return f"cannot reach Ollama at {self.host}. Is the Ollama app running?"
+        capabilities = getattr(info, "capabilities", None)
+        if self.vision and capabilities and "vision" not in capabilities:
+            log.warning("%s can't see images; photos are described to it as text only", self.model)
+            self.vision = False
         return None

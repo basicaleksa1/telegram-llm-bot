@@ -99,6 +99,13 @@ def test_llm_defaults(home):
     assert config.llm_timeout == 60
     assert config.llm_allowed_chats == frozenset()
     assert config.llm_reply_language == ""
+    assert config.auto_reply_delay_max == 0
+    assert config.llm_typo_rate == 0
+    assert config.llm_vision is True
+    assert config.llm_max_images == 3
+    assert config.handoff_notify_chat == ""
+    assert config.handoff_client_message == ""
+    assert config.paused_chats_file == home.root / "paused_chats.json"
 
 
 def test_llm_settings_are_read(home):
@@ -116,6 +123,12 @@ def test_llm_settings_are_read(home):
             "LLM_TIMEOUT": "15",
             "LLM_ALLOWED_CHATS": "123, -100456,789",
             "LLM_REPLY_LANGUAGE": "English",
+            "AUTO_REPLY_DELAY_MAX": "600",
+            "LLM_TYPO_RATE": "0.05",
+            "LLM_VISION": "false",
+            "LLM_MAX_IMAGES": "2",
+            "HANDOFF_NOTIFY_CHAT": "@my_other_account",
+            "HANDOFF_CLIENT_MESSAGE": "ill get back to you",
         }
     )
 
@@ -129,6 +142,12 @@ def test_llm_settings_are_read(home):
     assert config.llm_timeout == 15
     assert config.llm_allowed_chats == frozenset({123, -100456, 789})
     assert config.llm_reply_language == "English"
+    assert config.auto_reply_delay_max == 600
+    assert config.llm_typo_rate == 0.05
+    assert config.llm_vision is False
+    assert config.llm_max_images == 2
+    assert config.handoff_notify_chat == "@my_other_account"
+    assert config.handoff_client_message == "ill get back to you"
 
 
 @pytest.mark.parametrize(
@@ -141,6 +160,12 @@ def test_llm_settings_are_read(home):
         ("AUTO_REPLY_DELAY", "later"),
         ("AUTO_REPLY_QUOTE", "maybe"),
         ("LLM_ALLOWED_CHATS", "123,abc"),
+        ("AUTO_REPLY_DELAY_MAX", "soon"),
+        ("LLM_TYPO_RATE", "lots"),
+        ("LLM_TYPO_RATE", "1.5"),
+        ("LLM_TYPO_RATE", "-0.1"),
+        ("LLM_VISION", "maybe"),
+        ("LLM_MAX_IMAGES", "0"),
     ],
 )
 def test_invalid_llm_settings_raise(key, value):

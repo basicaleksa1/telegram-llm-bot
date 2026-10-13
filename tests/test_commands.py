@@ -6,6 +6,9 @@ from userbot import handlers  # noqa: F401  (registers the commands)
 from userbot.commands import COMMANDS, Context, build_pattern, register_commands
 from userbot.config import Config
 from userbot.handlers.basic import chat_id, format_help, ping
+from userbot.handlers.handoff import pause, resume
+from userbot.handlers.handoff import paused as paused_command
+from userbot.handoff import PausedChats, format_notification
 
 CONFIG = Config(api_id=1, api_hash="x", command_prefix=".")
 CTX = Context(config=CONFIG, commands=COMMANDS)
@@ -20,7 +23,7 @@ def fake_event(chat=42, reply=None):
 
 
 def test_expected_commands_are_registered():
-    assert {c.name for c in COMMANDS} >= {"ping", "id", "help"}
+    assert {c.name for c in COMMANDS} >= {"ping", "id", "help", "pause", "resume", "paused"}
 
 
 def test_pattern_matches_command_with_and_without_args():
@@ -81,3 +84,69 @@ def test_help_lists_every_command_with_prefix():
 
     for cmd in COMMANDS:
         assert f"!{cmd.name} - {cmd.description}" in text
+
+
+# --- Pause / resume -----------------------------------------------------------------
+
+ME = 1000
+
+
+def handoff_event(tmp_path, chat=42, args=None, reply=None):
+    ctx = Context(config=Config(api_id=1, api_hash="x", paused_chats_file=tmp_path / "p.json"), commands=COMMANDS)
+    event = SimpleNamespace(
+        chat_id=chat,
+        is_reply=reply is not None,
+        get_reply_message=AsyncMock(return_value=reply),
+        pattern_match=SimpleNamespace(group=lambda i: args),
+        client=SimpleNamespace(get_me=AsyncMock(return_value=SimpleNamespace(id=ME))),
+        edit=AsyncMock(),
+        delete=AsyncMock(),
+    )
+    return event, ctx, PausedChats(tmp_path / "p.json")
+
+
+def test_pause_in_their_chat_pauses_it_and_deletes_the_command(tmp_path):
+    event, ctx, paused = handoff_event(tmp_path, chat=42)
+
+    asyncio.run(pause(event, ctx))
+
+    assert paused.is_paused(42)
+    event.delete.assert_awaited_once()  # they must not see ".pause"
+    event.edit.assert_not_awaited()
+
+
+def test_resume_by_id_from_saved_messages(tmp_path):
+    event, ctx, paused = handoff_event(tmp_path, chat=ME, args="42")
+    paused.pause(42)
+
+    asyncio.run(resume(event, ctx))
+
+    assert not paused.is_paused(42)
+    assert "42" in event.edit.await_args.args[0]
+
+
+def test_resume_as_reply_to_a_handoff_alert(tmp_path):
+    alert = SimpleNamespace(raw_text=format_notification("Pera", 42, "no supplier", []))
+    event, ctx, paused = handoff_event(tmp_path, chat=ME, reply=alert)
+    paused.pause(42)
+
+    asyncio.run(resume(event, ctx))
+
+    assert not paused.is_paused(42)
+
+
+def test_resume_in_saved_messages_without_target_explains(tmp_path):
+    event, ctx, _ = handoff_event(tmp_path, chat=ME)
+
+    asyncio.run(resume(event, ctx))
+
+    assert "<chat id>" in event.edit.await_args.args[0]
+
+
+def test_paused_lists_chats(tmp_path):
+    event, ctx, paused = handoff_event(tmp_path, chat=ME)
+    paused.pause(42, name="Pera", reason="no supplier")
+
+    asyncio.run(paused_command(event, ctx))
+
+    assert "Pera" in event.edit.await_args.args[0]

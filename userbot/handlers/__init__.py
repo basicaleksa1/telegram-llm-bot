@@ -3,4 +3,4 @@
 To add a new command, create a module here and import it below.
 """
 
-from . import basic  # noqa: F401
+from . import basic, handoff  # noqa: F401

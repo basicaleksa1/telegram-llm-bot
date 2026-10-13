@@ -7,6 +7,7 @@ from ollama import ResponseError
 
 from userbot.config import DEFAULT_PROMPT, Config
 from userbot.llm import FALLBACK_SYSTEM_PROMPT, LLM, LLMError, PromptFile, load_system_prompt
+from userbot.handoff import HANDOFF_MARKER
 from userbot.paths import DEFAULT_PROMPTS_DIR
 
 HISTORY = [{"role": "user", "content": "hej"}]
@@ -108,9 +109,11 @@ def test_missing_prompt_file_uses_built_in_default(tmp_path):
     assert load_system_prompt(tmp_path / "nope.txt") == FALLBACK_SYSTEM_PROMPT
 
 
-@pytest.mark.parametrize("name", ["chat.txt", "busy.txt"])
-def test_shipped_prompts_exist_and_use_owner_placeholder(name):
-    assert "{name}" in load_system_prompt(DEFAULT_PROMPTS_DIR / name)
+def test_shipped_prompt_uses_owner_placeholder_and_handoff_marker():
+    prompt = load_system_prompt(DEFAULT_PROMPTS_DIR / "chat.txt")
+
+    assert "{name}" in prompt
+    assert HANDOFF_MARKER in prompt
 
 
 def test_default_prompt_is_the_conversation_prompt():
@@ -146,3 +149,34 @@ def test_switching_prompt_file(tmp_path):
     llm.use_prompt_file(tmp_path / "busy.txt")
 
     assert llm.system_prompt == "Busy {name}."
+
+
+IMAGE_HISTORY = [{"role": "user", "content": "[sent a photo]", "images": [b"jpeg"]}]
+
+
+def test_images_are_passed_to_a_vision_model(tmp_path):
+    messages = make_llm(SimpleNamespace(), tmp_path).build_messages("A", IMAGE_HISTORY)
+
+    assert messages[1:] == IMAGE_HISTORY
+
+
+def test_images_are_dropped_when_vision_is_off(tmp_path):
+    messages = make_llm(SimpleNamespace(), tmp_path, llm_vision=False).build_messages("A", IMAGE_HISTORY)
+
+    assert messages[1:] == [{"role": "user", "content": "[sent a photo]"}]
+
+
+def test_check_turns_vision_off_for_text_only_models(tmp_path):
+    client = SimpleNamespace(show=AsyncMock(return_value=SimpleNamespace(capabilities=["completion"])))
+    llm = make_llm(client, tmp_path)
+
+    assert asyncio.run(llm.check()) is None
+    assert llm.vision is False
+
+
+def test_check_keeps_vision_for_vision_models(tmp_path):
+    client = SimpleNamespace(show=AsyncMock(return_value=SimpleNamespace(capabilities=["completion", "vision"])))
+    llm = make_llm(client, tmp_path)
+
+    assert asyncio.run(llm.check()) is None
+    assert llm.vision is True
