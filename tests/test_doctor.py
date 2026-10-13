@@ -60,9 +60,9 @@ def test_reply_delay_range_is_shown(home):
 def test_handoff_target_and_paused_chats_are_shown(home):
     PausedChats(home.root / "paused_chats.json").pause(42)
 
-    check = checks_for(home, "HANDOFF_NOTIFY_CHAT=@alt\n")["Handoff"]
+    check = checks_for(home, "HANDOFF_NOTIFY_CHAT=@my_alt_account\n")["Handoff"]
 
-    assert "@alt" in check.detail
+    assert "@my_alt_account" in check.detail
     assert "1 chat(s) paused" in check.detail
 
 
@@ -76,3 +76,14 @@ def test_login_check_without_saved_login_warns(home):
 
 def test_print_checks_does_not_crash(home, capsys):
     doctor.print_checks(list(checks_for(home).values()))
+
+
+def test_test_servers_are_flagged(home):
+    check = checks_for(home, "TELEGRAM_TEST_SERVERS=true\n")["Telegram servers"]
+
+    assert check.status == WARN
+    assert "false" in check.fix
+
+
+def test_real_servers_are_not_mentioned(home):
+    assert "Telegram servers" not in checks_for(home)

@@ -24,6 +24,7 @@ from .config import read_settings
 from .menu import run_menu
 from .paths import default_prompt_names, ensure_home, get_home, resolve_home, restore_default_prompts, set_home
 from .setup_wizard import run_setup
+from .updates import apply_updates, show_notice
 from .ui import console, open_folder, open_in_editor, prepare_console, setup_logging
 
 app = typer.Typer(add_completion=False, rich_markup_mode="rich", help="Telegram userbot that auto-replies with a local AI.")
@@ -46,9 +47,19 @@ def root(
         raise typer.Exit()
     resolved = resolve_home(home)
     set_home(resolved)
+    first_run = not resolved.settings_file.exists()
     ensure_home(resolved)
     # Log to logs/userbot.log from the start, so setup problems end up there too.
     setup_logging(read_settings(resolved).get("LOG_LEVEL", "").strip().upper() or "INFO", resolved.logs_dir)
+    try:
+        notice = apply_updates(resolved, first_run)
+    except Exception:
+        # Never let an update problem stop the app from starting.
+        logging.getLogger("userbot").exception("Updating the data folder failed")
+        console.print("[yellow]Couldn't bring your settings and prompt up to date (details in the log). Starting anyway.[/]")
+    else:
+        if notice is not None:
+            show_notice(notice, resolved)
     if ctx.invoked_subcommand is None:
         run_menu(resolved)
 

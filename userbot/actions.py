@@ -51,6 +51,11 @@ def friendly_error(e: BaseException) -> str:
         return "Wrong two-step verification password."
     if isinstance(e, errors.FloodWaitError):
         return f"Telegram asks to wait {e.seconds} seconds before trying again (rate limit)."
+    if isinstance(e, ValueError) and "cannot sign up" in str(e).lower():
+        return (
+            "That phone number has no Telegram account yet, and this program can't create one. "
+            "Create the account in the official Telegram app first (on test servers: its test mode), then log in here."
+        )
     if isinstance(e, ConnectionError | OSError):
         return f"Network problem: {e}. Check your internet connection."
     return f"{type(e).__name__}: {e}"

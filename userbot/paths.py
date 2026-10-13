@@ -3,7 +3,8 @@
 Everything a user can change lives in one *data folder*:
 
     settings.env      settings (same KEY=VALUE format as .env.example)
-    prompts/          the AI's instructions; edit freely, they're never overwritten
+    prompts/          the AI's instructions; edit freely. Replaced only by "Restore the
+                      original prompts" or a version update (updates.py), with a backup
     sessions/         the Telegram login. PRIVATE: it grants access to the account
     logs/             log files, handy for bug reports
 

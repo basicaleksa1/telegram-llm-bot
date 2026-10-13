@@ -61,6 +61,8 @@ def _print_status(home: Home) -> None:
         telegram = "[green]login saved[/]"
     else:
         telegram = "[yellow]not logged in yet[/] (the bot asks when it starts)"
+    if config.telegram_test_servers:
+        telegram += " · [yellow]TEST servers[/] (test account)"
     table.add_row("Telegram", telegram)
 
     if not config.llm_enabled:

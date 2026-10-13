@@ -13,6 +13,11 @@ settings.env
 logs/
 # Chats the AI handed over to you (contains chat IDs)
 paused_chats.json
+# Written by version updates: which version last ran, and the old settings
+# file (it contains API_ID / API_HASH)
+version.json
+.env.before-*
+settings.env.before-*
 
 # Tester bundles (scripts/build_bundle.py)
 dist/

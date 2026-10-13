@@ -5,6 +5,7 @@ works for a one-off run. See paths.py for where the settings file lives.
 """
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,7 @@ class Config:
     session_name: str = "userbot"
     sessions_dir: Path = Path("sessions")
     command_prefix: str = "."
+    telegram_test_servers: bool = False
     log_level: str = "INFO"
 
     auto_reply_enabled: bool = True
@@ -56,7 +58,9 @@ class Config:
 
     @property
     def session_path(self) -> Path:
-        return self.sessions_dir / self.session_name
+        # The test-server login is a different account: keep it in its own file.
+        name = f"{self.session_name}-test" if self.telegram_test_servers else self.session_name
+        return self.sessions_dir / name
 
     @property
     def has_telegram_credentials(self) -> bool:
@@ -75,8 +79,8 @@ class Setting:
 EDITABLE_SETTINGS = [
     Setting("AUTO_REPLY_ENABLED", "bool", "Reply automatically to private messages (AI or fixed text)."),
     Setting("AUTO_REPLY_TEXT", "text", "Fixed reply, used when the AI is off, not allowed for the chat, or fails."),
-    Setting("AUTO_REPLY_DELAY_ENABLED", "bool", "Wait AUTO_REPLY_DELAY(_MAX) before replying. false = reply within ~2 seconds, handy for testing."),
-    Setting("AUTO_REPLY_DELAY", "seconds", "Wait until the person stops typing for this long, then reply once. 0 = reply immediately."),
+    Setting("AUTO_REPLY_DELAY_ENABLED", "bool", "Wait AUTO_REPLY_DELAY(_MAX) before replying. false = reply after ~2 seconds instead, handy for testing."),
+    Setting("AUTO_REPLY_DELAY", "seconds", "Wait until the person stops sending messages for this long, then reply once. 0 = reply immediately."),
     Setting("AUTO_REPLY_DELAY_MAX", "seconds", "If larger than AUTO_REPLY_DELAY, wait a random time between the two instead. 0 = always AUTO_REPLY_DELAY."),
     Setting("AUTO_REPLY_COOLDOWN", "seconds", "Minimum seconds between auto-replies in the same chat. 0 = no limit."),
     Setting("AUTO_REPLY_QUOTE", "bool", "Quote their message above each reply (false looks more like a normal chat)."),
@@ -88,11 +92,12 @@ EDITABLE_SETTINGS = [
     Setting("LLM_TYPO_RATE", "number", "Share of words (0-1) that get a small typo in AI replies, e.g. 0.03. 0 = no typos."),
     Setting("LLM_VISION", "bool", "Show the AI the photos people send (the model must support images, like qwen3.5)."),
     Setting("LLM_MAX_IMAGES", "int", "How many of the most recent photos in the chat the AI sees."),
-    Setting("HANDOFF_NOTIFY_CHAT", "text", "Who gets the alert when the AI hands a chat over to you: @username, phone or ID. Empty = your Saved Messages."),
+    Setting("HANDOFF_NOTIFY_CHAT", "text", "Who gets the alert when the AI hands a chat over to you: @username, +phone or ID. Empty = your Saved Messages."),
     Setting("HANDOFF_CLIENT_MESSAGE", "text", "Sent to the person when the AI hands the chat over to you. Empty = send nothing."),
     Setting("LLM_TIMEOUT", "seconds", "Seconds to wait for the AI before sending the fixed text instead."),
     Setting("LLM_ALLOWED_CHATS", "chats", "Comma-separated chat IDs that get AI replies (find them with .id). Empty = everyone."),
     Setting("COMMAND_PREFIX", "text", "What your commands start with, e.g. . for .ping"),
+    Setting("TELEGRAM_TEST_SERVERS", "bool", "Use Telegram's test servers with a test account (99966…) instead of your real account. For trying things out."),
     Setting("LOG_LEVEL", "text", "INFO, or DEBUG for much more detail (DEBUG also logs message text)."),
     Setting("LLM_HOST", "text", "Where Ollama runs. Only change this if you know you need to."),
 ]
@@ -114,18 +119,18 @@ def write_setting(key: str, value: str, home: Home | None = None) -> None:
     path = home.settings_file
     path.touch(exist_ok=True)
     old = dotenv_values(path).get(key)
-    set_key(path, key, value, quote_mode="never" if _plain(value) else "always")
+    set_key(path, key, value, quote_mode="never" if is_plain_value(value) else "always")
     try:
         load_config(home=home, require_telegram=False)
     except ConfigError:
         if old is None:
             unset_key(path, key, quote_mode="never")
         else:
-            set_key(path, key, old, quote_mode="never" if _plain(old) else "always")
+            set_key(path, key, old, quote_mode="never" if is_plain_value(old) else "always")
         raise
 
 
-def _plain(value: str) -> bool:
+def is_plain_value(value: str) -> bool:
     return not any(ch in value for ch in "#'\"\\\n") and value == value.strip()
 
 
@@ -169,6 +174,7 @@ def load_config(
         session_name=get("SESSION_NAME") or "userbot",
         sessions_dir=home.sessions_dir,
         command_prefix=get("COMMAND_PREFIX") or ".",
+        telegram_test_servers=_parse_bool("TELEGRAM_TEST_SERVERS", get("TELEGRAM_TEST_SERVERS"), default=False),
         log_level=get("LOG_LEVEL").upper() or "INFO",
         auto_reply_enabled=_parse_bool("AUTO_REPLY_ENABLED", get("AUTO_REPLY_ENABLED"), default=True),
         auto_reply_text=get("AUTO_REPLY_TEXT") or "brate radim",
@@ -188,9 +194,28 @@ def load_config(
         llm_typo_rate=_parse_fraction("LLM_TYPO_RATE", get("LLM_TYPO_RATE")),
         llm_vision=_parse_bool("LLM_VISION", get("LLM_VISION"), default=True),
         llm_max_images=_parse_positive_int("LLM_MAX_IMAGES", get("LLM_MAX_IMAGES"), default=3),
-        handoff_notify_chat=get("HANDOFF_NOTIFY_CHAT"),
+        handoff_notify_chat=parse_notify_target(get("HANDOFF_NOTIFY_CHAT")),
         handoff_client_message=get("HANDOFF_CLIENT_MESSAGE"),
         paused_chats_file=home.root / "paused_chats.json",
+    )
+
+
+def parse_notify_target(value: str) -> str:
+    """HANDOFF_NOTIFY_CHAT as @username, +phone or numeric ID ("" = Saved Messages).
+
+    Also accepts a t.me link or a username without the @.
+    """
+    value = value.strip()
+    if not value:
+        return ""
+    if link := re.fullmatch(r"(?:https?://)?t(?:elegram)?\.me/@?(\w+)/?", value):
+        value = link.group(1)
+    if re.fullmatch(r"-?\d{5,}|\+\d{7,15}", value.replace(" ", "")):
+        return value.replace(" ", "")
+    if re.fullmatch(r"@?[A-Za-z]\w{3,31}", value):
+        return "@" + value.lstrip("@")
+    raise ConfigError(
+        f"HANDOFF_NOTIFY_CHAT must be an @username, a +phone number or a numeric ID, got {value!r}."
     )
 
 

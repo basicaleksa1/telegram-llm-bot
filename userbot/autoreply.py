@@ -70,11 +70,11 @@ def reply_delay(config: Config, rng: random.Random) -> float:
     """Seconds to wait before replying.
 
     AUTO_REPLY_DELAY, or a random time up to AUTO_REPLY_DELAY_MAX if that's
-    larger. With AUTO_REPLY_DELAY_ENABLED=false, at most QUICK_REPLY_DELAY.
+    larger. With AUTO_REPLY_DELAY_ENABLED=false, always QUICK_REPLY_DELAY.
     """
     delay, delay_max = config.auto_reply_delay, config.auto_reply_delay_max
     if not config.auto_reply_delay_enabled:
-        return min(delay, QUICK_REPLY_DELAY)
+        return QUICK_REPLY_DELAY
     return rng.uniform(delay, delay_max) if delay_max > delay else delay
 
 
@@ -175,6 +175,9 @@ class AutoReplier:
     async def respond(self, event: events.NewMessage.Event) -> None:
         if self.paused.is_paused(event.chat_id):
             return  # paused while we were waiting to answer
+        if await self._answered_since(event):
+            log.info("Not replying in chat %s: there's already a reply from your account after their message", event.chat_id)
+            return
         composed = await self.compose(event)
         if composed.handoff is not None:
             await self.hand_off(event, composed.handoff, composed.history)
@@ -190,6 +193,12 @@ class AutoReplier:
         else:
             await event.respond(text)  # plain message, like a normal chat
         self._last_reply[event.chat_id] = self._clock()
+
+    async def _answered_since(self, event: events.NewMessage.Event) -> bool:
+        """Whether a message from your account came after theirs, e.g. you jumped in during the delay."""
+        async for newest in event.client.iter_messages(event.chat_id, limit=1):
+            return bool(newest.out) and newest.id > event.id
+        return False
 
     def _llm_allowed(self, chat_id: int) -> bool:
         return self.llm is not None and (not self.allowed_chats or chat_id in self.allowed_chats)
@@ -218,7 +227,9 @@ class AutoReplier:
         """Stop answering this chat, tell the person you'll be back, and alert you."""
         name = display_name(await event.get_sender())
         self.paused.pause(event.chat_id, name=name, reason=reason)
-        log.info("Handed chat %s over to you: %s", event.chat_id, reason)
+        # The reason can hold client details: message content only at DEBUG, like replies.
+        log.info("Handed chat %s over to you", event.chat_id)
+        log.debug("Handoff reason: %r", reason)
         if self.handoff_message:
             await self._send(event, self.handoff_message)
 

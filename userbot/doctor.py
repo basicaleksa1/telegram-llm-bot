@@ -39,6 +39,11 @@ async def run_checks(home: Home, online: bool = True) -> list[Check]:
         return checks
     add(Check("Settings", OK, str(home.settings_file)))
 
+    if config.telegram_test_servers:
+        add(Check(
+            "Telegram servers", WARN, "TEST servers, with a test account (TELEGRAM_TEST_SERVERS=true)",
+            "Fine for trying things out. Set it to false to answer your real chats.",
+        ))
     if config.has_telegram_credentials:
         add(Check("Telegram API ID / hash", OK, f"API_ID {config.api_id}"))
     else:

@@ -310,6 +310,38 @@ def test_fallback_text_never_gets_typos():
     event.reply.assert_awaited_once_with("zauzet sam")
 
 
+def test_no_reply_when_you_already_answered_during_the_delay():
+    theirs = msg(1, "hej")
+    yours = msg(2, "evo me, sta ima", out=True)
+    event = fake_event(message=theirs, client=FakeClient(history=[yours, theirs]))  # newest first
+    llm = fake_llm()
+
+    asyncio.run(AutoReplier(make_config(), llm=llm).handle(event))
+
+    event.reply.assert_not_awaited()
+    llm.reply.assert_not_awaited()
+
+
+def test_your_older_messages_do_not_stop_the_reply():
+    yours = msg(1, "jesi tu?", out=True)
+    theirs = msg(2, "jesam")
+    event = fake_event(message=theirs, client=FakeClient(history=[theirs, yours]))
+
+    asyncio.run(AutoReplier(make_config(), llm=fake_llm("super")).handle(event))
+
+    event.reply.assert_awaited_once_with("super")
+
+
+def test_handoff_reason_is_not_logged_at_info(caplog):
+    event = fake_event(client=FakeClient())
+
+    with caplog.at_level("INFO", logger="userbot.autoreply"):
+        asyncio.run(AutoReplier(make_config(), llm=fake_llm("[[HANDOFF]] 2 models, paid $3")).handle(event))
+
+    assert "Handed chat" in caplog.text
+    assert "2 models" not in caplog.text
+
+
 # --- Random delay ----------------------------------------------------------------
 
 
@@ -328,10 +360,10 @@ def test_disabled_delay_replies_quickly_whatever_the_delay_settings():
     assert replier.pick_delay() == QUICK_REPLY_DELAY
 
 
-def test_disabled_delay_keeps_an_even_shorter_delay():
+def test_disabled_delay_still_waits_briefly_to_answer_bursts_once():
     replier = AutoReplier(make_config(auto_reply_delay_enabled=False, auto_reply_delay=0))
 
-    assert replier.pick_delay() == 0
+    assert replier.pick_delay() == QUICK_REPLY_DELAY
 
 
 def test_delay_is_fixed_when_max_is_not_larger():

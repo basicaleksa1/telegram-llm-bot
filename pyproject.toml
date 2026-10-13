@@ -1,7 +1,7 @@
 [project]
 name = "telegram-userbot"
 # Keep in sync with userbot/__init__.py (scripts/build_bundle.py checks it).
-version = "0.1.0"
+version = "0.2.0"
 description = "Telegram userbot that auto-replies with a local AI (Ollama)."
 readme = "README.md"
 requires-python = ">=3.11"
