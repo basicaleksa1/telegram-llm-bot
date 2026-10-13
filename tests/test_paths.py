@@ -1,5 +1,5 @@
 from userbot import paths
-from userbot.paths import DEFAULT_PROMPTS_DIR, Home, ensure_home, resolve_home, restore_default_prompts
+from userbot.paths import DEFAULT_PROMPTS_DIR, Home, default_prompt_names, ensure_home, resolve_home, restore_default_prompts
 
 
 def test_override_wins(tmp_path, monkeypatch):
@@ -65,3 +65,8 @@ def test_relative_paths_resolve_against_the_data_folder(tmp_path):
 
     assert home.resolve("prompts/x.txt") == tmp_path / "prompts/x.txt"
     assert home.resolve(tmp_path / "abs.txt") == tmp_path / "abs.txt"
+
+
+def test_default_prompt_names_match_the_shipped_files():
+    assert default_prompt_names() == sorted(p.name for p in DEFAULT_PROMPTS_DIR.glob("*.txt"))
+    assert "chat.txt" in default_prompt_names()

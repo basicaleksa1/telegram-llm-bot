@@ -47,7 +47,7 @@ The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on
 2. **First start:** the launcher downloads Python and the libraries automatically, then offers the **setup wizard** (4 steps):
    1. **Telegram API ID and hash.** It explains where to get them, offers to open my.telegram.org, and checks the format.
    2. **The local AI.** It detects Ollama and starts it if it isn't running. If it's missing, it installs it after asking (Windows/macOS) or shows the one command to run (Linux). Then it detects RAM and GPU, recommends a model, and downloads it with a progress bar.
-   3. **Prompt.** Choose `chat` or `busy`, with an option to open the file in an editor right away.
+   3. **Prompt.** Choose which prompt file to use, with an option to open it in an editor right away.
    4. **Telegram login.** Phone, the code from the Telegram app, and the 2FA password if set.
 3. **After setup, a menu.** Later starts open it directly:
 
@@ -90,7 +90,7 @@ The model is **not** inside the zip (it's 1–8 GB). Ollama downloads it once on
   ```
   TelegramUserbot/
   ├── settings.env        # same KEY=VALUE format as .env (created from .env.example)
-  ├── prompts/            # chat.txt, busy.txt (+ any you add); copied on first run, never overwritten
+  ├── prompts/            # chat.txt (+ any you add); copied on first run, never overwritten
   ├── sessions/           # Telegram login, private
   └── logs/userbot.log    # rotating, for bug reports. Reply text is only logged at DEBUG level
   ```

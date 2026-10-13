@@ -143,12 +143,12 @@ def test_prompt_file_that_disappears_falls_back_to_default(tmp_path):
 
 
 def test_switching_prompt_file(tmp_path):
-    (tmp_path / "busy.txt").write_text("Busy {name}.")
+    (tmp_path / "other.txt").write_text("Other {name}.")
     llm = make_llm(SimpleNamespace(), tmp_path)
 
-    llm.use_prompt_file(tmp_path / "busy.txt")
+    llm.use_prompt_file(tmp_path / "other.txt")
 
-    assert llm.system_prompt == "Busy {name}."
+    assert llm.system_prompt == "Other {name}."
 
 
 IMAGE_HISTORY = [{"role": "user", "content": "[sent a photo]", "images": [b"jpeg"]}]

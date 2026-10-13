@@ -97,6 +97,11 @@ def ensure_home(home: Home) -> None:
                 shutil.copyfile(default, target)
 
 
+def default_prompt_names() -> list[str]:
+    """The prompt files shipped with the app, e.g. ["chat.txt"]."""
+    return sorted(p.name for p in DEFAULT_PROMPTS_DIR.glob("*.txt"))
+
+
 def restore_default_prompts(home: Home) -> list[str]:
     """Overwrite the shipped prompt files in the data folder with the defaults."""
     if home.prompts_dir.resolve() == DEFAULT_PROMPTS_DIR.resolve():

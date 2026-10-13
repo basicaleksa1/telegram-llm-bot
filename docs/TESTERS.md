@@ -1,6 +1,6 @@
 # Telegram Userbot: tester guide
 
-This program logs in as **your own Telegram account**. When someone sends you a private message, an AI running **on your computer** writes a reply for you. These steps walk you through everything that has to be set up, most of it online, in the order you'll need it.
+This program logs in as **your own Telegram account**. When someone sends you a private message, an AI running **on your computer** writes a reply for you. It follows a sales script, and at the key point it stops and alerts you so you can take over. These steps walk you through everything that has to be set up, most of it online, in the order you'll need it.
 
 Expect about **30–60 minutes** the first time, most of it spent waiting for downloads.
 
@@ -35,7 +35,7 @@ You need:
   - about **10 GB of free disk space**
 - **A stable internet connection**, ideally Wi-Fi, for the downloads.
 
-> ⚠️ **Read this once.** While the bot runs, **the AI answers real people as you**. It is told not to make promises or share private information, but small AI models sometimes say odd things. You can limit it to a few chats (see [Settings worth knowing](#settings-worth-knowing)). Your login is stored on your computer only. Never send anyone the `sessions` folder.
+> ⚠️ **Read this once.** While the bot runs, **the AI answers real people as you**. It is told to stick to the facts in its script, but small AI models sometimes say odd things. You can limit it to a few chats (see [Settings worth knowing](#settings-worth-knowing)). Your login is stored on your computer only. Never send anyone the `sessions` folder.
 
 ---
 
@@ -149,15 +149,14 @@ This step installs Ollama and downloads an AI model.
 The download shows a progress bar and can take a while. If it gets interrupted, run it again and it **continues where it stopped**. You can switch models later in the menu under **AI model**.
 
 ### 4.3 Prompt
-The **prompt** is a plain text file with instructions for the AI. It's sent to the model as-is. Two are included:
-- **chat:** chats with people as you
-- **busy:** says you're not around and will reply later
+The **prompt** is a plain text file with instructions for the AI. It's sent to the model as-is. The included one, **chat**, is a sales script for a Reddit promotion service: it asks the client about their models, looks at the photos they send, explains pricing, and hands the chat over to you when the client has no Reddit accounts and no supplier (or asks if they're talking to a bot).
 
 `{name}` in the prompt is replaced with your Telegram first name. You can edit the prompt at any time (see [Editing the prompt](#editing-the-prompt)).
 
-> ✏️ **Before you start the bot, read the chat prompt** (answer *y* to "Open it in an editor now?").
-> - Its *About {name}* lines (gender, where you live, work, interests, how you write) are **example details**. The AI tells people they're true about you, so replace them with your own, or delete what you don't want said.
+> ✏️ **Before you start the bot, read the prompt** (answer *y* to "Open it in an editor now?").
+> - The `<facts>` section (prices, what you need from the client) is what the AI tells people. Check that it's right.
 > - Out of the box, **replies are always in English**. That's both the prompt and the setting `LLM_REPLY_LANGUAGE=English`; see [Settings worth knowing](#settings-worth-knowing) to change it.
+> - To get the handoff alerts on another Telegram account, set `HANDOFF_NOTIFY_CHAT` (see [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you)).
 
 ### 4.4 Telegram login (online, once)
 1. Enter **your phone number** in international format (`+381…`).
@@ -187,18 +186,37 @@ After the setup you see the **menu**. Next time you double-click the launcher, i
    Quit
 ```
 
-- **Test the AI here in the terminal (playground):** chat with the AI without Telegram. You play the friend who messages you. This is the best way to try out prompt changes.
-  - `/prompt busy` switches to another prompt.
-  - `/reset` starts over.
-  - `/quit` goes back to the menu.
+- **Test the AI here in the terminal (playground):** chat with the AI without Telegram. You play the client who messages you. This is the best way to try out prompt changes. Nothing is sent to anyone.
+  - `/photo` followed by a picture's path sends a photo (drag the file into the window to get its path).
+  - It shows how long the real bot would wait before replying. At a handoff it shows the alert you'd get, and the chat stays quiet until `/resume`.
+  - `/prompt name` switches to another prompt, `/reset` starts over, `/quit` goes back to the menu.
+  - To test the script, play a client: "hi i have 2 models", send a photo, "paid, 3$", "first time", "how much?", "what accounts?", "i dont have accounts", "i dont have a supplier". The last one should trigger the handoff.
 - **Start the bot:** the bot now answers private messages. Leave the window open; **Ctrl+C** stops the bot and returns to the menu.
   - **Quick test:** in Telegram, open **Saved Messages** and send `.ping`. It turns into `pong (… ms)`.
-  - Then ask a friend to message you. After a few seconds they see "typing…" and get a reply.
+  - Then ask a friend to message you. **Replies wait a random 3–10 minutes on purpose**, so it looks like a person answering. Then they see "typing…" and get a reply. For a quick test, set `AUTO_REPLY_DELAY` to `3` and `AUTO_REPLY_DELAY_MAX` to `0` (see [Settings worth knowing](#settings-worth-knowing)), and set them back afterwards.
 - **Check everything (doctor):** if something doesn't work, start here. It lists every problem with a hint on how to fix it.
 
 **What the bot doesn't answer:** groups, channels and bots. It only replies in private chats. Your own messages are never answered.
 
 **The computer has to stay on and awake** while the bot runs. A sleeping laptop doesn't reply.
+
+---
+
+## When the AI hands a chat to you
+
+When the client reaches the key point of the script (no Reddit accounts and no supplier), or asks whether they're talking to a bot, the AI stops:
+
+1. The client gets a short holding message (setting `HANDOFF_CLIENT_MESSAGE`).
+2. You get an **alert** with a summary and the last messages. It goes to the account in `HANDOFF_NOTIFY_CHAT`, or to your own **Saved Messages** if that's empty.
+3. The bot no longer answers that chat, even after a restart, until you let it continue.
+
+**To let the bot continue in that chat:**
+- From the alert account: **reply `resume` to the alert**. That account can also send `paused` to list the paused chats.
+- From your own account: reply `.resume` to the alert in Saved Messages.
+
+**Setting it up:** in Settings, set `HANDOFF_NOTIFY_CHAT` to your **other** Telegram account's username, for example `@my_second_account`, and restart the bot. The start-up text says where alerts go (*Handoff alerts go to …*).
+
+You can also stop the AI in a chat yourself: send `.pause` in that chat (the message disappears right away), and `.resume` to turn it back on.
 
 ---
 
@@ -209,12 +227,13 @@ After the setup you see the **menu**. Next time you double-click the launcher, i
 3. **That's it.** The next reply uses the new version, in the running bot and in the playground. No restart needed.
 
 Other options in **Prompts**:
-- **Switch to another prompt** (chat ↔ busy). Restart the bot afterwards if it's running.
+- **Switch to another prompt** (if you created one). Restart the bot afterwards if it's running.
 - **Create a new prompt:** a copy of the current one under a new name, so you can experiment without losing the original.
-- **Restore the original chat/busy prompts** if an edit went wrong.
+- **Restore the original prompts** if an edit went wrong, or to get the newest version after an update. **A new version of the bot doesn't replace your prompt by itself.**
 
 Tips:
-- **Write how you text,** e.g. *"lowercase, short, often says 'brate'"*. The more the prompt says about how you write, the more natural the replies.
+- **Keep the `[[HANDOFF]]` rule** in the `<handoff>` section, or the AI never hands chats over to you.
+- **Typos and reply timing are settings,** not prompt lines (see below).
 - **Anything in the prompt may end up in a reply to anyone.** Don't put secrets in it.
 
 ---
@@ -227,8 +246,11 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 |---|---|
 | `LLM_ALLOWED_CHATS` | **Only these chats get AI replies.** Everyone else gets the fixed text. Good for testing with one friend first. To find a chat's ID, start the bot and send `.id` in that chat: your message turns into "Chat ID: …" (the other person sees it too; delete it afterwards). |
 | `AUTO_REPLY_TEXT` | The fixed text sent when the AI is off, not allowed for that chat, or fails. Default: `brate radim`. |
-| `AUTO_REPLY_DELAY` | Seconds to wait for the person to stop typing before replying once. |
-| `LLM_REPLY_LANGUAGE` | Forces replies into one language. **Default: `English`.** Empty = whatever the prompt says (the chat prompt also says English; edit its LANGUAGE and FINAL REMINDER lines too). |
+| `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX` | Each reply waits a random time between these two (in seconds). **Default for new installs: 180 and 600, so 3–10 minutes.** Set them to `3` and `0` for quick testing. |
+| `HANDOFF_NOTIFY_CHAT` | Which account gets the handoff alerts, e.g. `@my_second_account`. Empty = your Saved Messages. |
+| `HANDOFF_CLIENT_MESSAGE` | What the client gets when the AI hands the chat to you. Empty = nothing. |
+| `LLM_TYPO_RATE` | How many words get a small typo (0–1). **Default: `0.03`.** `0` = no typos. |
+| `LLM_REPLY_LANGUAGE` | Forces replies into one language. **Default: `English`.** Empty = whatever the prompt says (the prompt also says English: remove that line from its `<style>` section too). |
 | `AUTO_REPLY_ENABLED` | `false` turns off all automatic replies. |
 
 ---
@@ -262,6 +284,9 @@ Menu → **Settings**. Pick a setting, read its explanation, and enter a new val
 | The model download is slow or stops | Run it again (menu → **AI model**); it continues where it stopped. |
 | Replies take a long time (30 s+) | The model is too big for your computer. Menu → **AI model**, and pick a smaller one. |
 | The bot always sends the fixed text | Run **Check everything**. Usually Ollama isn't running, or the model isn't downloaded. |
+| The bot takes minutes to reply | That's on purpose: 3–10 minutes by default. Change `AUTO_REPLY_DELAY` / `AUTO_REPLY_DELAY_MAX`. |
+| The bot stopped replying in one chat | The AI probably handed it to you. Check for an alert, then reply `resume` to it (see [When the AI hands a chat to you](#when-the-ai-hands-a-chat-to-you)). |
+| No handoff alert on my other account | Set `HANDOFF_NOTIFY_CHAT` to that account's `@username` and restart. Until it's found, alerts go to your Saved Messages. |
 | "FloodWait" message | Telegram is rate-limiting. Wait the number of seconds shown. |
 
 ---

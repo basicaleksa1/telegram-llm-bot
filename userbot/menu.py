@@ -8,7 +8,7 @@ from rich.table import Table
 
 from . import __version__, actions, bot, doctor, ollama_setup
 from .config import EDITABLE_SETTINGS, read_settings
-from .paths import Home, restore_default_prompts
+from .paths import Home, default_prompt_names, restore_default_prompts
 from .setup_wizard import run_setup
 from .ui import console, open_folder, open_in_editor
 
@@ -99,7 +99,7 @@ def _prompts_menu(home: Home) -> None:
                 questionary.Choice("Switch to another prompt", "use"),
                 questionary.Choice("Create a new prompt (copy of the active one)", "new"),
                 questionary.Choice("Open the prompts folder", "folder"),
-                questionary.Choice("Restore the original chat/busy prompts", "reset"),
+                questionary.Choice("Restore the original prompts", "reset"),
                 questionary.Choice("Back", "back"),
             ],
         ).ask()
@@ -123,8 +123,8 @@ def _prompts_menu(home: Home) -> None:
                 console.print(str(home.prompts_dir))
         elif choice == "reset":
             if questionary.confirm(
-                "Overwrite chat.txt and busy.txt with the original versions? Your edits to them are lost "
-                "(other prompt files are kept).",
+                f"Overwrite {' and '.join(default_prompt_names())} with the original version? Your edits to it "
+                "are lost (other prompt files are kept).",
                 default=False,
             ).ask():
                 restored = restore_default_prompts(home)
